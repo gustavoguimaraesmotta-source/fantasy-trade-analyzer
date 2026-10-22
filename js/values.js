@@ -21,23 +21,33 @@ export function leagueProfile(league) {
   };
 }
 
-// Fora da temporada (IR, suspenso, inativo): em redraft vale quase nada; em dynasty perde parte do valor.
-const OUT_STATUSES = new Set(["IR", "Out", "PUP", "Sus", "NA", "COV"]);
-const OUT_FACTOR = { redraft: 0.1, dynasty: 0.6 };
-
-function isOut(player) {
-  return OUT_STATUSES.has(player.injury_status) || player.status === "Inactive";
+// Desconto por situação do jogador: [redraft, dynasty].
+// Fora por muito tempo (IR, suspenso, inativo) quase zera em redraft; "Out" perde só esta semana.
+const LONG_OUT = new Set(["IR", "PUP", "Sus", "NA", "COV"]);
+function availabilityFactor(player, isDynasty) {
+  const pick = ([redraft, dynasty]) => (isDynasty ? dynasty : redraft);
+  if (LONG_OUT.has(player.injury_status) || player.status === "Inactive") return pick([0.1, 0.6]);
+  if (player.injury_status === "Out") return pick([0.8, 0.95]);
+  if (player.injury_status === "Doubtful") return pick([0.9, 1]);
+  return 1;
 }
 
-export function heuristicValue(player, isDynasty) {
+// scale: valores do FantasyCalc em ordem decrescente. Com ele, o N-º do ranking do Sleeper recebe
+// o valor do N-º da lista (mesma escala do resto do app); sem ele, usamos uma curva própria.
+export function heuristicValue(player, isDynasty, scale = null) {
   const pos = player.position;
   const rank = player.search_rank || 9_999_999;
   if (!VALUED_POSITIONS.has(pos) || rank >= 9_999_999) return 0;
-  let value = 10_000 * Math.exp(-rank / 90);
-  if (isDynasty && POSITION_PEAK_AGE[pos] && player.age) {
-    value *= Math.min(1.2, Math.max(0.6, 1 + 0.04 * (POSITION_PEAK_AGE[pos] - player.age)));
+  let value;
+  if (scale?.length) {
+    value = scale[Math.min(rank, scale.length) - 1];
+  } else {
+    value = 10_000 * Math.exp(-rank / 90);
+    if (isDynasty && POSITION_PEAK_AGE[pos] && player.age) {
+      value *= Math.min(1.2, Math.max(0.6, 1 + 0.04 * (POSITION_PEAK_AGE[pos] - player.age)));
+    }
   }
-  if (isOut(player)) value *= isDynasty ? OUT_FACTOR.dynasty : OUT_FACTOR.redraft;
+  value *= availabilityFactor(player, isDynasty);
   value *= LOW_VALUE_POSITIONS[pos] ?? 1;
   return Math.round(value * 10) / 10;
 }
@@ -85,14 +95,13 @@ export async function getValues(league, players) {
   } catch {
     external = {};
   }
-  // Quem não está na lista do FantasyCalc não é relevante no mercado agora (lesão longa, reserva
-  // profundo...). A heurística usa outra escala, então fica limitada ao menor valor da lista.
-  const externalValues = Object.values(external);
-  const floor = externalValues.length ? Math.min(...externalValues) : Infinity;
+  // Quem não está na lista do FantasyCalc (lesionado, novato, reserva) recebe a estimativa pelo
+  // ranking do Sleeper, convertida para a escala do FantasyCalc e descontada pela situação.
+  const scale = Object.values(external).sort((a, b) => b - a);
 
   const values = {};
   for (const [pid, player] of Object.entries(players)) {
-    values[pid] = external[pid] || Math.min(heuristicValue(player, profile.is_dynasty), floor);
+    values[pid] = external[pid] || heuristicValue(player, profile.is_dynasty, scale);
   }
   return { values, source };
 }
