@@ -411,8 +411,11 @@ async function loadWaivers(force = false) {
   $("#waivers-summary").innerHTML = `<div class="chips"><strong>Suas posições em escassez:</strong> ${chips}
     <small>Os destacados preenchem essas posições.</small></div>`;
 
+  // O Sleeper não tem página pública por jogador: copiamos o nome e abrimos a liga (no celular abre o app).
+  const sleeperLink = (p) =>
+    `<a class="sleeper-link" href="https://sleeper.com/leagues/${esc(leagueId)}" target="_blank" rel="noopener" data-copy="${esc(p.name)}">Sleeper ↗</a>`;
   const row = (p, extra) => `<tr class="${p.fills_need ? "mine" : ""}">
-      <td>${posBadge(p.position)} ${playerName(p)}${p.fills_need ? `<span class="tag need">escassez</span>` : ""}</td>
+      <td>${posBadge(p.position)} ${playerName(p)}${p.fills_need ? `<span class="tag need">escassez</span>` : ""} ${sleeperLink(p)}</td>
       ${extra}
       <td class="num">${fmt(p.value)}</td>
       <td>${p.upgrade ? `${esc(p.upgrade.name)} <span class="pos-delta">${signed(p.upgrade.gain)}</span>` : `<span class="muted">—</span>`}</td>
@@ -500,6 +503,15 @@ function bindEvents() {
     if (pid) toggleTarget(pid, false);
   });
   $("#waivers-btn").addEventListener("click", () => loadWaivers(true));
+  $("#tab-waivers").addEventListener("click", (e) => {
+    const link = e.target.closest(".sleeper-link");
+    if (!link) return;
+    const name = link.dataset.copy;
+    navigator.clipboard?.writeText(name).then(
+      () => setStatus(`"${name}" copiado. Cole na busca de jogadores do Sleeper.`),
+      () => setStatus(`Procure "${name}" na busca de jogadores do Sleeper.`),
+    );
+  });
   $("#finder-results").addEventListener("click", (e) => {
     const idx = e.target.dataset.open;
     if (idx !== undefined) openSuggestion(+idx);
