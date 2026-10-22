@@ -1,7 +1,7 @@
 // Service worker: deixa o app instalável e abre a "casca" do app mesmo com internet ruim.
 // Os dados (Sleeper/FantasyCalc) sempre vêm da rede, e os arquivos do site também (o cache só
 // entra quando está offline), então uma nova versão publicada chega sozinha aos celulares.
-const CACHE = "fta-v1";
+const CACHE = "fta-v2";
 const APP_SHELL = [
   "./",
   "index.html",
@@ -35,8 +35,10 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
+  // cache: "no-cache" confere com o GitHub se o arquivo mudou, em vez de usar a cópia
+  // de até 10 min que o navegador guarda; assim uma versão nova aparece na hora.
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request.url, { cache: "no-cache" })
       .then((resp) => {
         const copy = resp.clone();
         caches.open(CACHE).then((cache) => cache.put(event.request, copy));

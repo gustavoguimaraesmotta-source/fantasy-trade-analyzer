@@ -468,14 +468,15 @@ if (savedUser) $("#username").value = savedUser;
 
 // Tema: Claro -> Escuro -> Automático (segue o sistema). Fica salvo no aparelho.
 const THEMES = [
-  { id: "light", label: "☀️ Claro", bar: "#0b1324" },
-  { id: "dark", label: "🌙 Escuro", bar: "#050a16" },
-  { id: "auto", label: "🌗 Automático", bar: "#0b1324" },
+  { id: "light", label: "☀️ Claro", bar: "#0b1324", scheme: "only light" },
+  { id: "dark", label: "🌙 Escuro", bar: "#050a16", scheme: "only dark" },
+  { id: "auto", label: "🌗 Automático", bar: "#0b1324", scheme: "light dark" },
 ];
 
 function applyTheme(id) {
   const theme = THEMES.find((t) => t.id === id) || THEMES[0];
   document.documentElement.setAttribute("data-theme", theme.id);
+  document.querySelector('meta[name="color-scheme"]')?.setAttribute("content", theme.scheme);
   $("#theme-btn").textContent = theme.label;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.bar);
   store.set("fta.theme", theme.id);
@@ -489,5 +490,6 @@ applyTheme(document.documentElement.getAttribute("data-theme"));
 
 // Torna o site instalável como app no celular (PWA).
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("sw.js").catch(() => { /* segue funcionando como site comum */ });
+  // updateViaCache: "none" faz o celular buscar o sw.js novo sempre, sem esperar o cache.
+  navigator.serviceWorker.register("sw.js", { updateViaCache: "none" }).catch(() => { /* segue funcionando como site comum */ });
 }

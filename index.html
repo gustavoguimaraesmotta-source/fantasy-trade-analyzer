@@ -14,12 +14,16 @@
   <meta name="apple-mobile-web-app-title" content="Trade Analyzer">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <!-- "only light" impede o Chrome/Samsung Internet de escurecer o site sozinhos no modo escuro do celular. -->
+  <meta name="color-scheme" content="only light">
   <script>
     // Aplica o tema salvo antes de desenhar a página (evita piscar). Padrão: claro.
     (function () {
       var t = "light";
       try { t = localStorage.getItem("fta.theme") || "light"; } catch (e) {}
       document.documentElement.setAttribute("data-theme", t);
+      var scheme = { light: "only light", dark: "only dark", auto: "light dark" }[t] || "only light";
+      document.querySelector('meta[name="color-scheme"]').setAttribute("content", scheme);
     })();
   </script>
   <link rel="stylesheet" href="css/styles.css">
