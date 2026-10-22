@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Fantasy Trade Analyzer</title>
+  <meta name="description" content="Analisador de trocas para ligas do Sleeper">
+  <meta name="theme-color" content="#0b1324">
+  <!-- Instalação como app (Android/Chrome via manifest; iPhone via tags apple-*) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Trade Analyzer">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">FTA</span>
+      <div>
+        <h1>Fantasy Trade Analyzer</h1>
+        <small>Integrado à API do Sleeper</small>
+      </div>
+    </div>
+    <form id="connect-form" class="connect">
+      <input id="username" placeholder="Usuário do Sleeper" required autocomplete="off">
+      <input id="season" type="number" min="2017" max="2100" placeholder="Temporada">
+      <button type="submit">Conectar</button>
+    </form>
+  </header>
+
+  <div id="league-bar" class="league-bar" hidden>
+    <label>Liga <select id="league-select"></select></label>
+    <label>Meu time <select id="my-team-select"></select></label>
+    <button id="refresh-btn" class="ghost" type="button">Atualizar dados</button>
+    <span id="league-meta" class="muted"></span>
+  </div>
+
+  <nav id="tabs" class="tabs" hidden>
+    <button data-tab="rosters" class="active">Elencos</button>
+    <button data-tab="compare">Comparar</button>
+    <button data-tab="analyzer">Trade Analyzer</button>
+    <button data-tab="finder">Trade Finder</button>
+  </nav>
+
+  <main>
+    <div id="status" class="status" hidden></div>
+
+    <section id="empty-state" class="empty">
+      <h2>Conecte sua conta do Sleeper</h2>
+      <p>Digite seu usuário acima. Vamos listar suas ligas, importar os elencos e calcular o valor de mercado de cada jogador.</p>
+    </section>
+
+    <section id="tab-rosters" class="tab" hidden>
+      <h2>Panorama da liga</h2>
+      <p class="muted">Times ordenados pelo valor do lineup titular ideal. Nas posições, o ranking na liga:
+        <span class="rank need">escassez</span> <span class="rank balanced">equilíbrio</span> <span class="rank surplus">excesso</span></p>
+      <div class="table-wrap"><table id="power-table" class="data"></table></div>
+    </section>
+
+    <section id="tab-compare" class="tab" hidden>
+      <div class="controls">
+        <select id="cmp-a"></select><span class="vs">vs</span><select id="cmp-b"></select>
+      </div>
+      <div id="compare-grid"></div>
+    </section>
+
+    <section id="tab-analyzer" class="tab" hidden>
+      <form id="trade-form">
+        <div class="controls">
+          <label>Parceiro de troca <select id="partner-select"></select></label>
+          <button type="submit">Analisar troca</button>
+          <button id="clear-trade" class="ghost" type="button">Limpar</button>
+        </div>
+        <div class="trade-grid">
+          <fieldset class="panel">
+            <legend id="sent-title">Você envia</legend>
+            <input class="filter" data-list="sent-list" placeholder="Filtrar jogador...">
+            <div id="sent-list" class="player-list" data-side="sent"></div>
+          </fieldset>
+          <fieldset class="panel">
+            <legend id="received-title">Você recebe</legend>
+            <input class="filter" data-list="received-list" placeholder="Filtrar jogador...">
+            <div id="received-list" class="player-list" data-side="received"></div>
+          </fieldset>
+        </div>
+      </form>
+      <div id="trade-result" class="panel result" hidden></div>
+    </section>
+
+    <section id="tab-finder" class="tab" hidden>
+      <div class="controls">
+        <label>Tolerância de valor
+          <select id="tolerance">
+            <option value="0.08">8% (rígida)</option>
+            <option value="0.15" selected>15%</option>
+            <option value="0.25">25% (flexível)</option>
+          </select>
+        </label>
+        <button id="finder-btn" type="button">Escanear liga</button>
+      </div>
+      <div id="finder-summary"></div>
+      <div id="finder-results"></div>
+    </section>
+  </main>
+</body>
+</html>

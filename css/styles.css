@@ -1,0 +1,175 @@
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --header: #0b1324;
+  --accent: #16a34a;
+  --accent-ink: #ffffff;
+  --danger: #dc2626;
+  --warn: #d97706;
+  --need-bg: #fee2e2;   --need-fg: #b91c1c;
+  --bal-bg: #e2e8f0;    --bal-fg: #334155;
+  --sur-bg: #dcfce7;    --sur-fg: #15803d;
+  --mine: #ecfdf5;
+  --qb: #ef4444; --rb: #10b981; --wr: #3b82f6; --te: #f59e0b; --k: #8b5cf6; --def: #64748b;
+  --radius: 10px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1120; --surface: #111827; --surface-2: #0f172a; --border: #1f2a3c;
+    --text: #e5e7eb; --muted: #94a3b8; --header: #050a16;
+    --need-bg: #3b1218; --need-fg: #fca5a5;
+    --bal-bg: #1e293b;  --bal-fg: #cbd5e1;
+    --sur-bg: #0f2e1d;  --sur-fg: #86efac;
+    --mine: #0f2a20;
+  }
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; }
+h1, h2, h3 { margin: 0; }
+h2 { font-size: 18px; margin-bottom: 4px; }
+.muted { color: var(--muted); }
+small { color: var(--muted); }
+
+button, select, input {
+  font: inherit; color: inherit; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); padding: 7px 10px;
+}
+button { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); cursor: pointer; font-weight: 600; }
+button.ghost { background: transparent; color: var(--text); border-color: var(--border); }
+button:hover { filter: brightness(1.05); }
+
+/* Topo ------------------------------------------------------------------ */
+.topbar {
+  background: var(--header); color: #fff; padding: 12px 20px;
+  /* No app instalado do iPhone a barra de status fica por cima do topo. */
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+  display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+}
+.brand { display: flex; gap: 10px; align-items: center; }
+.brand h1 { font-size: 17px; }
+.brand small { color: #94a3b8; }
+.logo { background: var(--accent); color: #fff; font-weight: 800; padding: 6px 8px; border-radius: 8px; }
+.connect { display: flex; gap: 8px; flex-wrap: wrap; }
+.connect input { background: #111c33; color: #fff; border-color: #24324f; }
+.connect #season { width: 110px; }
+
+.league-bar {
+  display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+  padding: 10px 20px; background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.league-bar label { display: flex; gap: 6px; align-items: center; font-weight: 600; }
+
+.tabs { display: flex; gap: 4px; padding: 0 20px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.tabs button {
+  background: none; border: none; border-bottom: 3px solid transparent; border-radius: 0;
+  color: var(--muted); padding: 12px 14px; white-space: nowrap;
+}
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+
+main { padding: 20px; max-width: 1280px; margin: 0 auto; }
+.tab > h2 + p { margin-top: 0; }
+.empty { text-align: center; padding: 60px 16px; color: var(--muted); }
+.empty h2 { color: var(--text); }
+
+.status { padding: 10px 14px; border-radius: var(--radius); margin-bottom: 14px; background: var(--bal-bg); }
+.status.error { background: var(--need-bg); color: var(--need-fg); }
+
+.controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.controls label { display: flex; gap: 6px; align-items: center; font-weight: 600; }
+.vs { font-weight: 700; color: var(--muted); }
+
+/* Tabelas --------------------------------------------------------------- */
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+table.data { width: 100%; border-collapse: collapse; }
+table.data th, table.data td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+table.data th { background: var(--surface-2); font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); position: sticky; top: 0; }
+table.data tbody tr:hover { background: var(--surface-2); }
+table.data tr.mine { background: var(--mine); }
+table.data .num { text-align: right; font-variant-numeric: tabular-nums; }
+table.data tr:last-child td { border-bottom: none; }
+
+.team-cell { display: flex; gap: 8px; align-items: center; }
+.team-cell img, .team-cell .ph { width: 28px; height: 28px; border-radius: 50%; background: var(--bal-bg); }
+.team-cell div { display: flex; flex-direction: column; }
+
+.rank { display: inline-block; min-width: 38px; text-align: center; padding: 2px 6px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+.rank.need { background: var(--need-bg); color: var(--need-fg); }
+.rank.balanced { background: var(--bal-bg); color: var(--bal-fg); }
+.rank.surplus { background: var(--sur-bg); color: var(--sur-fg); }
+
+.pos { display: inline-block; width: 34px; text-align: center; font-size: 11px; font-weight: 800; color: #fff; border-radius: 5px; padding: 2px 0; }
+.pos-QB { background: var(--qb); } .pos-RB { background: var(--rb); } .pos-WR { background: var(--wr); }
+.pos-TE { background: var(--te); } .pos-K { background: var(--k); } .pos-DEF { background: var(--def); }
+.pos-NA { background: var(--def); }
+.tag { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; margin-left: 4px; }
+.tag.inj { background: var(--need-bg); color: var(--need-fg); }
+.tag.start { background: var(--sur-bg); color: var(--sur-fg); }
+
+/* Comparador ------------------------------------------------------------ */
+.compare-block { margin-bottom: 16px; }
+.compare-block h3 { font-size: 14px; margin: 0 0 6px; display: flex; gap: 8px; align-items: center; }
+.compare-block td.a { width: 38%; } .compare-block td.b { width: 38%; text-align: right; }
+.better { font-weight: 700; color: var(--sur-fg); }
+
+/* Trade Analyzer -------------------------------------------------------- */
+.trade-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 760px) { .trade-grid { grid-template-columns: 1fr; } }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin: 0; min-width: 0; }
+.panel legend { font-weight: 700; padding: 0 6px; }
+.filter { width: 100%; margin-bottom: 8px; }
+.player-list { max-height: 420px; overflow-y: auto; }
+.player-row { display: grid; grid-template-columns: 20px 40px 1fr auto; gap: 8px; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.player-row:hover { background: var(--surface-2); }
+.player-row:has(input:checked) { background: var(--mine); }
+.player-row .val { font-variant-numeric: tabular-nums; color: var(--muted); }
+
+.result { margin-top: 16px; }
+.verdict { font-size: 18px; font-weight: 800; margin-bottom: 10px; }
+.verdict.fair { color: var(--accent); }
+.verdict.slight_win, .verdict.win { color: var(--sur-fg); }
+.verdict.slight_loss { color: var(--warn); }
+.verdict.loss { color: var(--danger); }
+.sides { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 760px) { .sides { grid-template-columns: 1fr; } }
+.sides ul { list-style: none; padding: 0; margin: 6px 0; }
+.sides li { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
+.sides li .v { margin-left: auto; font-variant-numeric: tabular-nums; }
+.total { font-size: 22px; font-weight: 800; }
+
+.balance-bar { position: relative; height: 12px; border-radius: 999px; margin: 18px 0 6px;
+  background: linear-gradient(90deg, var(--danger), var(--warn) 35%, var(--accent) 50%, var(--warn) 65%, var(--danger)); opacity: .85; }
+.balance-bar .marker { position: absolute; top: -5px; width: 4px; height: 22px; background: var(--text); border-radius: 2px; transform: translateX(-2px); }
+.balance-legend { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+
+.impact { margin-top: 14px; }
+.pos-delta { color: var(--sur-fg); font-weight: 700; }
+.neg-delta { color: var(--danger); font-weight: 700; }
+
+/* Trade Finder ---------------------------------------------------------- */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+.suggestion-players { display: flex; flex-direction: column; gap: 2px; }
+.reason { white-space: normal !important; min-width: 220px; color: var(--muted); font-size: 12px; }
+
+/* Celular ----------------------------------------------------------------- */
+@media (max-width: 600px) {
+  .topbar, .league-bar, .tabs { padding-left: 16px; padding-right: 16px; }
+  main { padding: 16px 16px max(16px, env(safe-area-inset-bottom, 0px)); }
+  .connect { width: 100%; }
+  .connect #username { flex: 1; min-width: 0; }
+  .connect #season { width: 90px; }
+  .league-bar label, .controls label { width: 100%; justify-content: space-between; }
+  .league-bar select, .controls select { flex: 1; min-width: 0; max-width: 70%; }
+  /* 16px evita o zoom automático do iPhone ao tocar nos campos */
+  input, select, button { font-size: 16px; }
+  .tabs button { padding: 12px 10px; }
+  .player-list { max-height: 50vh; }
+}
