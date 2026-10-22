@@ -89,13 +89,26 @@ async function connect(ev) {
   await loadLeague(preferred.league_id);
 }
 
+// Cada carregamento ganha um número; se o usuário trocar de liga no meio, a resposta antiga é descartada.
+let loadSeq = 0;
+
 async function loadLeague(leagueId, refresh = false) {
-  const ov = await withStatus("Importando elencos e valores de mercado (na primeira visita do dia leva uns segundos)...", () => api.league(leagueId, refresh));
-  if (!ov) return;
+  const seq = ++loadSeq;
+  setStatus("Importando elencos e valores de mercado (na primeira visita do dia leva uns segundos)...");
+  let ov;
+  try {
+    ov = await api.league(leagueId, refresh);
+  } catch (err) {
+    if (seq === loadSeq) setStatus(err.message, "error");
+    return;
+  }
+  if (seq !== loadSeq) return;
+  setStatus(null);
   store.set("fta.league", leagueId);
   state.overview = ov;
 
-  const mine = ov.teams.find((t) => t.owner_id === state.user?.user_id) || ov.teams[0];
+  const uid = state.user?.user_id;
+  const mine = ov.teams.find((t) => t.owner_id === uid || t.co_owners.includes(uid)) || ov.teams[0];
   setMyTeam(mine.roster_id);
 
   $("#league-meta").textContent = `${ov.league.season} · ${ov.league.scoring} · ${ov.league.format} · valores: ${ov.league.value_source}`;
@@ -274,7 +287,7 @@ async function runFinder() {
   const data = await withStatus("Escaneando elencos adversários...", () =>
     api.finder(leagueId, state.myRosterId, $("#tolerance").value),
   );
-  if (!data) return;
+  if (!data || state.overview.league.league_id !== leagueId) return;
   state.suggestions = data.suggestions;
 
   const chips = (list, cls) => list.map((p) => `<span class="rank ${cls}">${p}</span>`).join(" ");

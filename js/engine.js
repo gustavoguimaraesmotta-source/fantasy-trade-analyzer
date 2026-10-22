@@ -85,6 +85,7 @@ export class LeagueContext {
     return {
       roster_id: rosterId,
       owner_id: ownerId,
+      co_owners: roster.co_owners || [],
       display_name: user.display_name || `Time ${rosterId}`,
       team_name: user.metadata?.team_name || null,
       avatar: user.avatar ? AVATAR_URL + user.avatar : null,
@@ -386,7 +387,7 @@ export function buildOverview(ctx) {
       status: league.status,
       total_rosters: league.total_rosters,
       roster_positions: league.roster_positions,
-      scoring: ppr === 1 ? "PPR" : ppr === 0.5 ? "Half-PPR" : `${ppr} PPR`,
+      scoring: ppr === 1 ? "PPR" : ppr === 0.5 ? "Half-PPR" : ppr === 0 ? "Standard" : `${ppr} PPR`,
       format: (profile.is_dynasty ? "Dynasty" : "Redraft") + (profile.num_qbs === 2 ? " · Superflex" : " · 1QB"),
       value_source: ctx.valueSource,
     },

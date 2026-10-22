@@ -22,8 +22,15 @@ async function get(path) {
 }
 
 let memPlayers = null;
+let pendingPlayers = null;
 
-async function getPlayers() {
+// Duas ligas carregando ao mesmo tempo compartilham o mesmo download.
+function getPlayers() {
+  if (!pendingPlayers) pendingPlayers = loadPlayers().finally(() => { pendingPlayers = null; });
+  return pendingPlayers;
+}
+
+async function loadPlayers() {
   if (memPlayers && Date.now() - memPlayers.at < PLAYERS_TTL) return memPlayers.data;
   try {
     const saved = JSON.parse(localStorage.getItem(PLAYERS_KEY));
