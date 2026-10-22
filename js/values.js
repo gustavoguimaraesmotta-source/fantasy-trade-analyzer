@@ -21,6 +21,14 @@ export function leagueProfile(league) {
   };
 }
 
+// Fora da temporada (IR, suspenso, inativo): em redraft vale quase nada; em dynasty perde parte do valor.
+const OUT_STATUSES = new Set(["IR", "Out", "PUP", "Sus", "NA", "COV"]);
+const OUT_FACTOR = { redraft: 0.1, dynasty: 0.6 };
+
+function isOut(player) {
+  return OUT_STATUSES.has(player.injury_status) || player.status === "Inactive";
+}
+
 export function heuristicValue(player, isDynasty) {
   const pos = player.position;
   const rank = player.search_rank || 9_999_999;
@@ -29,6 +37,7 @@ export function heuristicValue(player, isDynasty) {
   if (isDynasty && POSITION_PEAK_AGE[pos] && player.age) {
     value *= Math.min(1.2, Math.max(0.6, 1 + 0.04 * (POSITION_PEAK_AGE[pos] - player.age)));
   }
+  if (isOut(player)) value *= isDynasty ? OUT_FACTOR.dynasty : OUT_FACTOR.redraft;
   value *= LOW_VALUE_POSITIONS[pos] ?? 1;
   return Math.round(value * 10) / 10;
 }
@@ -76,9 +85,14 @@ export async function getValues(league, players) {
   } catch {
     external = {};
   }
+  // Quem não está na lista do FantasyCalc não é relevante no mercado agora (lesão longa, reserva
+  // profundo...). A heurística usa outra escala, então fica limitada ao menor valor da lista.
+  const externalValues = Object.values(external);
+  const floor = externalValues.length ? Math.min(...externalValues) : Infinity;
+
   const values = {};
   for (const [pid, player] of Object.entries(players)) {
-    values[pid] = external[pid] || heuristicValue(player, profile.is_dynasty);
+    values[pid] = external[pid] || Math.min(heuristicValue(player, profile.is_dynasty), floor);
   }
   return { values, source };
 }

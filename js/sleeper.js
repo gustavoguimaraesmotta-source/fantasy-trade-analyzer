@@ -3,9 +3,10 @@
 const BASE_URL = "https://api.sleeper.app/v1";
 
 // /players/nfl tem ~5 MB: guardamos só os campos usados, por 24h (o Sleeper pede 1 chamada/dia).
-const PLAYERS_KEY = "fta.players.v1";
+const PLAYERS_KEY = "fta.players.v2";
 const PLAYERS_TTL = 24 * 3600 * 1000;
-const PLAYER_FIELDS = ["full_name", "first_name", "last_name", "position", "team", "age", "injury_status", "search_rank"];
+const PLAYER_FIELDS = ["full_name", "first_name", "last_name", "position", "team", "age", "injury_status", "status", "search_rank"];
+try { localStorage.removeItem("fta.players.v1"); } catch { /* cache antigo, sem o campo status */ }
 
 async function get(path) {
   let resp;
