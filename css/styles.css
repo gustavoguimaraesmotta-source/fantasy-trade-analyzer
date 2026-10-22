@@ -179,8 +179,20 @@ table.data tr:last-child td { border-bottom: none; }
 .finder-modes .panel { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .finder-modes h3 { font-size: 15px; }
 .finder-modes p { margin: 0; }
-.target-row { display: flex; gap: 8px; width: 100%; flex-wrap: wrap; }
-.target-row select { flex: 1; min-width: 0; }
+.finder-modes .target-panel { align-items: stretch; }
+.target-panel button#target-btn { align-self: flex-start; }
+.target-team { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+.target-team select { flex: 1; min-width: 0; }
+.target-list { max-height: 260px; border: 1px solid var(--border); border-radius: 8px; padding: 0 6px; }
+.target-list .player-row:has(input:disabled) { opacity: .45; cursor: not-allowed; }
+.target-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 28px; }
+.target-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--mine); border: 1px solid var(--border);
+  border-radius: 999px; padding: 3px 4px 3px 10px; font-weight: 600; font-size: 13px; }
+.target-chip button { background: transparent; border: none; color: var(--muted); padding: 0 6px; font-size: 16px; line-height: 1; }
+.chance { display: inline-block; padding: 2px 8px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+.chance.alta { background: var(--sur-bg); color: var(--sur-fg); }
+.chance.media { background: var(--bal-bg); color: var(--bal-fg); }
+.list-note { margin: -4px 0 8px; font-size: 13px; }
 .section-title { font-size: 15px; margin: 18px 0 8px; }
 .tag.need { background: var(--need-bg); color: var(--need-fg); }
 @media (max-width: 760px) { .finder-modes { grid-template-columns: 1fr; } }

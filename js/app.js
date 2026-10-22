@@ -132,7 +132,8 @@ function setMyTeam(rosterId) {
   $("#finder-summary").innerHTML = "";
   $("#finder-results").innerHTML = "";
   $("#trade-result").hidden = true;
-  $("#target-select").innerHTML = targetOptions(others);
+  $("#target-team").innerHTML = options(others, state.partnerId);
+  setTargetTeam(state.partnerId);
   state.waiversKey = null;
   if (state.tab === "waivers") loadWaivers();
   renderPower();
@@ -299,61 +300,96 @@ async function runFinder() {
   renderSuggestions(data.suggestions, "Nenhuma troca viável encontrada com essa tolerância. Tente 25%.");
 }
 
-// Lista de jogadores dos outros times, agrupada por time e ordenada por valor.
-function targetOptions(teams) {
-  const groups = teams
-    .map((t) => {
-      const opts = t.players
-        .filter((p) => p.value > 0)
-        .map((p) => `<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.position || "?")} · ${fmt(p.value)}</option>`)
-        .join("");
-      return opts ? `<optgroup label="${esc(teamName(t))}">${opts}</optgroup>` : "";
-    })
-    .join("");
-  return `<option value="">Escolha um jogador...</option>${groups}`;
+// --- Buscar alvos: escolhe o time, depois marca até MAX_TARGETS jogadores ----------
+const MAX_TARGETS = 3;
+
+function setTargetTeam(rosterId) {
+  state.targetTeamId = rosterId;
+  state.targets = new Set();
+  $("#target-team").value = String(rosterId);
+  renderTargetPicker();
+}
+
+function renderTargetPicker() {
+  const t = teamById(state.targetTeamId);
+  const players = (t?.players ?? []).filter((p) => p.value > 0);
+  const full = state.targets.size >= MAX_TARGETS;
+  $("#target-list").innerHTML =
+    players
+      .map((p) => {
+        const checked = state.targets.has(p.id);
+        return `<label class="player-row">
+          <input type="checkbox" value="${esc(p.id)}" ${checked ? "checked" : ""} ${full && !checked ? "disabled" : ""}>
+          ${posBadge(p.position)}<span>${playerName(p)}</span><span class="val">${fmt(p.value)}</span></label>`;
+      })
+      .join("") || `<p class="muted">Esse time não tem jogadores com valor de mercado.</p>`;
+
+  const chosen = players.filter((p) => state.targets.has(p.id));
+  $("#target-chips").innerHTML = chosen.length
+    ? chosen.map((p) => `<span class="target-chip">${esc(p.name)}<button type="button" data-remove="${esc(p.id)}" aria-label="Remover ${esc(p.name)}">×</button></span>`).join("") +
+      `<small>${chosen.length}/${MAX_TARGETS} · valor somado ${fmt(chosen.reduce((s, p) => s + p.value, 0))}</small>`
+    : `<small class="muted">Nenhum jogador marcado.</small>`;
+}
+
+function toggleTarget(pid, on) {
+  if (on && state.targets.size < MAX_TARGETS) state.targets.add(pid);
+  else state.targets.delete(pid);
+  renderTargetPicker();
 }
 
 async function runTargetFinder() {
-  const targetId = $("#target-select").value;
-  if (!targetId) {
-    setStatus("Escolha primeiro o jogador que você quer.", "error");
+  if (!state.targets.size) {
+    setStatus("Marque pelo menos um jogador do time escolhido.", "error");
     return;
   }
   const leagueId = state.overview.league.league_id;
   const data = await withStatus("Montando propostas...", () =>
-    api.finderTarget(leagueId, state.myRosterId, targetId, $("#tolerance").value),
+    api.finderTargets(leagueId, state.myRosterId, [...state.targets], $("#tolerance").value),
   );
   if (!data || state.overview.league.league_id !== leagueId) return;
 
-  const t = data.target;
-  $("#finder-summary").innerHTML = `<div class="chips"><strong>Alvo:</strong> ${posBadge(t.position)} ${playerName(t)}
-    <small>valor ${fmt(t.value)} · dono: ${esc(teamName(data.partner))}</small></div>`;
-  renderSuggestions(data.suggestions, "Nenhum pacote do seu elenco fecha com essa tolerância. Tente 25% ou outro alvo.");
+  const names = data.targets.map((t) => `${posBadge(t.position)} ${playerName(t)}`).join(", ");
+  $("#finder-summary").innerHTML = `<div class="chips"><strong>Alvos:</strong> ${names}
+    <small>dono: ${esc(teamName(data.partner))}</small></div>`;
+
+  state.suggestions = [...data.fair, ...data.likely];
+  const tol = Math.round(Number($("#tolerance").value) * 100);
+  $("#finder-results").innerHTML = `
+    <h3 class="section-title">⚖️ Pacotes justos</h3>
+    <p class="muted list-note">Diferença de valor de até 5% para qualquer lado.</p>
+    ${data.fair.length ? suggestionTable(data.fair, 0) : `<p class="muted">Nenhum pacote do seu elenco fica dentro de ±5%.</p>`}
+    <h3 class="section-title">🤝 Mais prováveis de aceitar</h3>
+    <p class="muted list-note">O outro dono sai ganhando. Você paga no máximo ${tol}% a mais (mude em "Tolerância de valor").</p>
+    ${data.likely.length ? suggestionTable(data.likely, data.fair.length, { chance: true }) : `<p class="muted">Nenhum pacote em que ele saia ganhando dentro dessa tolerância. Tente 25%.</p>`}`;
 }
 
 function renderSuggestions(suggestions, emptyMessage) {
   state.suggestions = suggestions;
-  if (!suggestions.length) {
-    $("#finder-results").innerHTML = `<p class="muted">${esc(emptyMessage)}</p>`;
-    return;
-  }
+  $("#finder-results").innerHTML = suggestions.length ? suggestionTable(suggestions, 0) : `<p class="muted">${esc(emptyMessage)}</p>`;
+}
+
+// offset: posição da primeira linha em state.suggestions (para o botão Analisar).
+function suggestionTable(suggestions, offset, { chance = false } = {}) {
   const list = (players) =>
     `<div class="suggestion-players">${players.map((p) => `<span>${posBadge(p.position)} ${playerName(p)} <small>${fmt(p.value)}</small></span>`).join("")}</div>`;
+  const chanceCell = (s) => `<td><span class="chance ${s.chance}">${s.chance === "alta" ? "Alta" : "Média"}</span><br>
+      <small>${s.overpay > 0 ? `você paga +${fmt(s.overpay)}` : `você ganha ${fmt(-s.overpay)}`}</small></td>`;
   const rows = suggestions
     .map(
       (s, i) => `<tr>
         <td><strong>${esc(teamName(s.partner))}</strong></td>
+        ${chance ? chanceCell(s) : ""}
         <td>${list(s.give)}</td>
         <td>${list(s.get)}</td>
         <td class="num">${fmt(s.sent_value)} → ${fmt(s.received_value)}<br><small>${pctFmt(s.balance_pct)}</small></td>
         <td class="num"><span class="${deltaClass(s.my_lineup_gain)}">${signed(s.my_lineup_gain)}</span>
           / <span class="${deltaClass(s.their_lineup_gain)}">${signed(s.their_lineup_gain)}</span></td>
         <td class="reason">${esc(s.reason)}</td>
-        <td><button type="button" class="ghost" data-open="${i}">Analisar</button></td></tr>`,
+        <td><button type="button" class="ghost" data-open="${offset + i}">Analisar</button></td></tr>`,
     )
     .join("");
-  $("#finder-results").innerHTML = `<div class="table-wrap"><table class="data"><thead><tr>
-      <th>Parceiro</th><th>Você envia</th><th>Você recebe</th><th class="num">Valor</th>
+  return `<div class="table-wrap"><table class="data"><thead><tr>
+      <th>Parceiro</th>${chance ? "<th>Chance de aceite</th>" : ""}<th>Você envia</th><th>Você recebe</th><th class="num">Valor</th>
       <th class="num">Ganho titular (você / ele)</th><th>Motivo</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
@@ -455,6 +491,14 @@ function bindEvents() {
 
   $("#finder-btn").addEventListener("click", runFinder);
   $("#target-btn").addEventListener("click", runTargetFinder);
+  $("#target-team").addEventListener("change", (e) => setTargetTeam(+e.target.value));
+  $("#target-list").addEventListener("change", (e) => {
+    if (e.target.type === "checkbox") toggleTarget(e.target.value, e.target.checked);
+  });
+  $("#target-chips").addEventListener("click", (e) => {
+    const pid = e.target.dataset.remove;
+    if (pid) toggleTarget(pid, false);
+  });
   $("#waivers-btn").addEventListener("click", () => loadWaivers(true));
   $("#finder-results").addEventListener("click", (e) => {
     const idx = e.target.dataset.open;

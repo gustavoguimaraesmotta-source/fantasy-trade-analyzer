@@ -122,13 +122,13 @@
           <p class="muted">Procura trocas que cubram suas posições em escassez com o excesso dos outros times.</p>
           <button id="finder-btn" type="button">Escanear liga</button>
         </div>
-        <div class="panel">
-          <h3>Buscar um alvo</h3>
-          <p class="muted">Escolha o jogador que você quer. O app monta pacotes do seu elenco que o dono teria motivo para aceitar.</p>
-          <div class="target-row">
-            <select id="target-select" aria-label="Jogador alvo"></select>
-            <button id="target-btn" type="button">Montar propostas</button>
-          </div>
+        <div class="panel target-panel">
+          <h3>Buscar alvos</h3>
+          <p class="muted">Escolha o time e marque até 3 jogadores que você quer. O app separa os pacotes justos dos que o dono tem mais chance de aceitar.</p>
+          <label class="target-team">Time <select id="target-team"></select></label>
+          <div id="target-chips" class="target-chips"></div>
+          <div id="target-list" class="player-list target-list"></div>
+          <button id="target-btn" type="button">Montar propostas</button>
         </div>
       </div>
       <div id="finder-summary"></div>

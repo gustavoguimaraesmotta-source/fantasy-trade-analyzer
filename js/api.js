@@ -8,7 +8,7 @@ import {
   analyzeTrade,
   buildOverview,
   findTrades,
-  findTradesForTarget,
+  findTradesForTargets,
   waiverReport,
 } from "./engine.js";
 
@@ -78,9 +78,9 @@ export const api = {
     return findTrades(ctx, rid, { tolerance: Number(tolerance) });
   },
 
-  async finderTarget(leagueId, rosterId, targetId, tolerance) {
+  async finderTargets(leagueId, rosterId, targetIds, tolerance) {
     const ctx = await getContext(leagueId);
-    return findTradesForTarget(ctx, Number(rosterId), targetId, { tolerance: Number(tolerance) });
+    return findTradesForTargets(ctx, Number(rosterId), targetIds, { tolerance: Number(tolerance) });
   },
 
   async waivers(leagueId, rosterId) {

@@ -351,59 +351,128 @@ function suggestionPayload(ctx, s, partner, reason) {
   };
 }
 
-// --- Trade Finder com alvo ---------------------------------------------------
-// Você escolhe um jogador de outro time; testamos pacotes de 1 a 3 jogadores seus e mantemos
-// os que respeitam a tolerância de valor e dão ao dono um motivo para aceitar:
-// ele recebe pelo menos o mesmo valor de mercado, ou o lineup titular dele melhora.
+// --- Trade Finder com alvos ----------------------------------------------------
+// Você marca de 1 a 3 jogadores de um mesmo time adversário; testamos pacotes de 1 a 4
+// jogadores seus e separamos o resultado em duas listas:
+//   justos   -> diferença de valor até ±FAIR_PCT (a faixa "Troca justa" do Analyzer);
+//   prováveis -> o outro dono sai ganhando (recebe mais valor e/ou o titular dele melhora),
+//                com o quanto você paga a mais limitado pela tolerância escolhida.
 
-const TARGET_MAX_LINEUP_LOSS = 0.05; // até 5% do titular dele, se receber mais valor
-const EXTRA_PLAYER_PENALTY = 400;
+export const MAX_TARGETS = 3;
+const MAX_GIVE = 4;
+const CHANCE_RANK = { alta: 0, media: 1 };
+const SPOT_PENALTY = 500; // cada vaga que o outro dono precisa liberar pesa contra o pacote
+const MAX_LINEUP_LOSS = 0.05; // "ganha valor" só conta se o titular dele cair no máximo 5%
 
-export function findTradesForTarget(ctx, myRosterId, targetId, { tolerance = 0.15, poolSize = 12, maxResults = 10 } = {}) {
-  const owner = ctx.rosters.find((r) => (r.players || []).includes(targetId));
-  if (!owner) throw new Error("Esse jogador não está em nenhum elenco da liga.");
-  const rid = owner.roster_id;
-  if (rid === myRosterId) throw new Error("Esse jogador já está no seu time.");
-  const targetValue = ctx.values[targetId] || 0;
-  if (targetValue <= 0) throw new Error("Esse jogador não tem valor de mercado para comparar.");
+// Evita sugestões quase iguais: dois pacotes que só trocam a peça de menor valor contam como um.
+function pickDiverse(sorted, n, value) {
+  const seen = new Set();
+  const out = [];
+  for (const c of sorted) {
+    const core = c.give.length > 1 ? [...c.give].sort((a, b) => value(b) - value(a)).slice(0, -1) : c.give;
+    const key = [...core].sort().join(",");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+    if (out.length >= n) break;
+  }
+  return out;
+}
+
+export function findTradesForTargets(ctx, myRosterId, targetIds, { tolerance = 0.15, poolSize = 12, perList = 5 } = {}) {
+  if (!targetIds.length) throw new Error("Marque pelo menos um jogador.");
+  if (targetIds.length > MAX_TARGETS) throw new Error(`Escolha no máximo ${MAX_TARGETS} jogadores.`);
+  const owners = new Set(targetIds.map((pid) => ctx.rosters.find((r) => (r.players || []).includes(pid))?.roster_id));
+  if (owners.has(undefined)) throw new Error("Algum jogador escolhido não está em nenhum elenco da liga.");
+  if (owners.size > 1) throw new Error("Os jogadores escolhidos precisam ser do mesmo time.");
+  const rid = [...owners][0];
+  if (rid === myRosterId) throw new Error("Esses jogadores já estão no seu time.");
 
   const value = (pid) => ctx.values[pid] || 0;
+  const recvAdj = packageValue(targetIds.map(value));
+  if (recvAdj <= 0) throw new Error("Os jogadores escolhidos não têm valor de mercado para comparar.");
+
   const myIds = ctx.rosterPlayerIds(myRosterId);
   const theirIds = ctx.rosterPlayerIds(rid);
   const myBefore = ctx.lineup(myIds).total;
   const theirBefore = ctx.lineup(theirIds).total;
-  const theirAfterBase = theirIds.filter((p) => p !== targetId);
+  const theirAfterBase = theirIds.filter((p) => !targetIds.includes(p));
   const pool = myIds.filter((p) => value(p) > 0).sort((a, b) => value(b) - value(a)).slice(0, poolSize);
 
-  const found = [];
-  for (const k of [1, 2, 3]) {
+  const candidates = [];
+  for (let k = 1; k <= MAX_GIVE; k++) {
     for (const give of combinations(pool, k)) {
       const sentAdj = packageValue(give.map(value));
-      const pct = (targetValue - sentAdj) / Math.max(sentAdj, targetValue);
-      if (Math.abs(pct) > tolerance) continue;
+      const pct = (recvAdj - sentAdj) / Math.max(sentAdj, recvAdj); // > 0: você ganha valor
+      if (pct > FAIR_PCT || pct < -tolerance) continue; // você ganha demais, ou paga demais
       const theirGain = ctx.lineup(theirAfterBase.concat(give)).total - theirBefore;
-      // Ele aceitaria se melhora o titular, ou se ganha valor sem perder muito no titular.
-      const acceptable = theirGain > 0 || (pct <= 0 && theirGain >= -TARGET_MAX_LINEUP_LOSS * theirBefore);
-      if (!acceptable) continue;
-      const myGain = ctx.lineup(myIds.filter((p) => !give.includes(p)).concat(targetId)).total - myBefore;
-      // Pacotes maiores ocupam vagas no elenco dele (precisa dispensar alguém): penalizamos.
-      const score = myGain + theirGain - 0.5 * Math.abs(targetValue - sentAdj) - EXTRA_PLAYER_PENALTY * (k - 1);
-      found.push({ give, get: [targetId], sentAdj, recvAdj: targetValue, pct, myGain, theirGain, score });
+      const myGain = ctx.lineup(myIds.filter((p) => !give.includes(p)).concat(targetIds)).total - myBefore;
+      const theyGainValue = pct <= 0 && theirGain >= -MAX_LINEUP_LOSS * theirBefore;
+      const theyImprove = theirGain > 0;
+      const chance = pct <= 0 && theyImprove ? "alta" : theyGainValue || theyImprove ? "media" : null;
+      const spots = Math.max(0, give.length - targetIds.length);
+      candidates.push({
+        give, get: targetIds, sentAdj, recvAdj, pct, myGain, theirGain, chance, spots,
+        fair: Math.abs(pct) <= FAIR_PCT,
+        overpay: sentAdj - recvAdj,
+        score: myGain,
+      });
     }
   }
-  found.sort((a, b) => b.score - a.score);
+
+  // Justos: primeiro o melhor pacote de cada tamanho (menor primeiro), depois completa pelo ranking.
+  const fairRanked = pickDiverse(
+    candidates
+      .filter((c) => c.fair)
+      .sort((a, b) => b.myGain - SPOT_PENALTY * b.spots - (a.myGain - SPOT_PENALTY * a.spots) || Math.abs(a.pct) - Math.abs(b.pct)),
+    Infinity,
+    value,
+  );
+  const bestPerSize = [];
+  for (let k = 1; k <= MAX_GIVE; k++) {
+    const best = fairRanked.find((c) => c.give.length === k);
+    if (best) bestPerSize.push(best);
+  }
+  const fair = [...bestPerSize, ...fairRanked.filter((c) => !bestPerSize.includes(c))].slice(0, perList);
+  const shown = new Set(fair);
+  const likely = pickDiverse(
+    candidates
+      .filter((c) => c.chance && !shown.has(c))
+      .sort(
+        (a, b) =>
+          CHANCE_RANK[a.chance] - CHANCE_RANK[b.chance] ||
+          a.overpay + SPOT_PENALTY * a.spots - (b.overpay + SPOT_PENALTY * b.spots) ||
+          b.theirGain - a.theirGain,
+      ),
+    perList,
+    value,
+  );
 
   const partner = ctx.teamMeta(rid);
   const partnerName = partner.team_name || partner.display_name;
-  const suggestions = found.slice(0, maxResults).map((s) => {
-    const motives = [];
-    if (s.pct <= 0) motives.push(`${partnerName} recebe mais valor de mercado`);
-    if (s.theirGain > 0) motives.push(`o lineup titular de ${partnerName} melhora`);
-    if (s.myGain < 0) motives.push("seu lineup perde um pouco agora, mas você leva o melhor jogador");
-    return suggestionPayload(ctx, s, partner, motives.join("; ").replace(/^./, (c) => c.toUpperCase()) + ".");
+  const describe = (s, mode) => {
+    const parts = [];
+    if (mode === "fair") parts.push(`Valor equilibrado (diferença de ${(Math.abs(s.pct) * 100).toFixed(1)}%)`);
+    if (s.pct <= 0 && mode === "likely") parts.push(`${partnerName} recebe mais valor de mercado`);
+    if (s.theirGain > 0) parts.push(`o lineup titular de ${partnerName} melhora`);
+    if (s.myGain < 0) parts.push("seu titular perde um pouco agora, em troca de jogadores melhores");
+    const spots = s.give.length - s.get.length;
+    if (spots > 0) parts.push(`${partnerName} precisa liberar ${spots} ${spots === 1 ? "vaga" : "vagas"} no elenco`);
+    return parts.join("; ").replace(/^./, (c) => c.toUpperCase()) + ".";
+  };
+  const payload = (s, mode) => ({
+    ...suggestionPayload(ctx, s, partner, describe(s, mode)),
+    chance: s.chance,
+    overpay: r1(s.overpay),
+    spots_needed: s.spots,
   });
 
-  return { target: ctx.playerCard(targetId), partner, suggestions };
+  return {
+    targets: targetIds.map((pid) => ctx.playerCard(pid)),
+    partner,
+    fair: fair.map((s) => payload(s, "fair")),
+    likely: likely.map((s) => payload(s, "likely")),
+  };
 }
 
 // --- Radar de waivers ----------------------------------------------------------
