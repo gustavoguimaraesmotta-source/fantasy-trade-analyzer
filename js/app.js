@@ -466,6 +466,27 @@ bindEvents();
 const savedUser = store.get("fta.username");
 if (savedUser) $("#username").value = savedUser;
 
+// Tema: Claro -> Escuro -> Automático (segue o sistema). Fica salvo no aparelho.
+const THEMES = [
+  { id: "light", label: "☀️ Claro", bar: "#0b1324" },
+  { id: "dark", label: "🌙 Escuro", bar: "#050a16" },
+  { id: "auto", label: "🌗 Automático", bar: "#0b1324" },
+];
+
+function applyTheme(id) {
+  const theme = THEMES.find((t) => t.id === id) || THEMES[0];
+  document.documentElement.setAttribute("data-theme", theme.id);
+  $("#theme-btn").textContent = theme.label;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme.bar);
+  store.set("fta.theme", theme.id);
+}
+
+$("#theme-btn").addEventListener("click", () => {
+  const current = THEMES.findIndex((t) => t.id === document.documentElement.getAttribute("data-theme"));
+  applyTheme(THEMES[(current + 1) % THEMES.length].id);
+});
+applyTheme(document.documentElement.getAttribute("data-theme"));
+
 // Torna o site instalável como app no celular (PWA).
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(() => { /* segue funcionando como site comum */ });

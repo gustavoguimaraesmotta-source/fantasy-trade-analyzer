@@ -19,18 +19,34 @@
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+/* Tema: claro por padrão. data-theme="dark" força o escuro; "auto" segue o celular/PC. */
+:root[data-theme="dark"] {
+  --bg: #0b1120; --surface: #111827; --surface-2: #0f172a; --border: #1f2a3c;
+  --text: #e5e7eb; --muted: #94a3b8; --header: #050a16;
+  --need-bg: #3b1218; --need-fg: #fca5a5;
+  --bal-bg: #1e293b;  --bal-fg: #cbd5e1;
+  --sur-bg: #0f2e1d;  --sur-fg: #86efac;
+  --mine: #0f2a20;
+  color-scheme: dark;
+}
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root[data-theme="auto"] {
     --bg: #0b1120; --surface: #111827; --surface-2: #0f172a; --border: #1f2a3c;
     --text: #e5e7eb; --muted: #94a3b8; --header: #050a16;
     --need-bg: #3b1218; --need-fg: #fca5a5;
     --bal-bg: #1e293b;  --bal-fg: #cbd5e1;
     --sur-bg: #0f2e1d;  --sur-fg: #86efac;
     --mine: #0f2a20;
+    color-scheme: dark;
   }
 }
+:root { color-scheme: light; }
+
+.theme-btn { background: transparent; border-color: #24324f; color: #fff; font-weight: 600; white-space: nowrap; order: 3; }
+@media (max-width: 600px) { .theme-btn { order: 0; margin-left: auto; padding: 6px 10px; } }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; }
 h1, h2, h3 { margin: 0; }
 h2 { font-size: 18px; margin-bottom: 4px; }
