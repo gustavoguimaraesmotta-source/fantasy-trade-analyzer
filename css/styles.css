@@ -159,6 +159,16 @@ table.data tr:last-child td { border-bottom: none; }
 .suggestion-players { display: flex; flex-direction: column; gap: 2px; }
 .reason { white-space: normal !important; min-width: 220px; color: var(--muted); font-size: 12px; }
 
+.finder-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.finder-modes .panel { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.finder-modes h3 { font-size: 15px; }
+.finder-modes p { margin: 0; }
+.target-row { display: flex; gap: 8px; width: 100%; flex-wrap: wrap; }
+.target-row select { flex: 1; min-width: 0; }
+.section-title { font-size: 15px; margin: 18px 0 8px; }
+.tag.need { background: var(--need-bg); color: var(--need-fg); }
+@media (max-width: 760px) { .finder-modes { grid-template-columns: 1fr; } }
+
 /* Celular ----------------------------------------------------------------- */
 @media (max-width: 600px) {
   .topbar, .league-bar, .tabs { padding-left: 16px; padding-right: 16px; }
@@ -170,6 +180,8 @@ table.data tr:last-child td { border-bottom: none; }
   .league-bar select, .controls select { flex: 1; min-width: 0; max-width: 70%; }
   /* 16px evita o zoom automático do iPhone ao tocar nos campos */
   input, select, button { font-size: 16px; }
-  .tabs button { padding: 12px 10px; }
+  .tabs { gap: 0; padding-left: 8px; padding-right: 8px; }
+  .tabs button { padding: 12px 8px; font-size: 15px; }
+  .tab-long { display: none; }
   .player-list { max-height: 50vh; }
 }

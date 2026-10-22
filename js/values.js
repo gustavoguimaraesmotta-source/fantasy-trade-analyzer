@@ -57,6 +57,15 @@ async function fantasyCalc(profile) {
   return values;
 }
 
+// Mapa completo {sleeperId: valor} do FantasyCalc para o formato da liga ({} se indisponível).
+export async function marketValueMap(league) {
+  try {
+    return await fantasyCalc(leagueProfile(league));
+  } catch {
+    return {};
+  }
+}
+
 export async function getValues(league, players) {
   const profile = leagueProfile(league);
   let external = {};

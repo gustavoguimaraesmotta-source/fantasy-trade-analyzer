@@ -43,8 +43,9 @@
   <nav id="tabs" class="tabs" hidden>
     <button data-tab="rosters" class="active">Elencos</button>
     <button data-tab="compare">Comparar</button>
-    <button data-tab="analyzer">Trade Analyzer</button>
-    <button data-tab="finder">Trade Finder</button>
+    <button data-tab="analyzer"><span class="tab-long">Trade </span>Analyzer</button>
+    <button data-tab="finder"><span class="tab-long">Trade </span>Finder</button>
+    <button data-tab="waivers">Waivers</button>
   </nav>
 
   <main>
@@ -101,10 +102,36 @@
             <option value="0.25">25% (flexível)</option>
           </select>
         </label>
-        <button id="finder-btn" type="button">Escanear liga</button>
+      </div>
+      <div class="finder-modes">
+        <div class="panel">
+          <h3>Escanear a liga</h3>
+          <p class="muted">Procura trocas que cubram suas posições em escassez com o excesso dos outros times.</p>
+          <button id="finder-btn" type="button">Escanear liga</button>
+        </div>
+        <div class="panel">
+          <h3>Buscar um alvo</h3>
+          <p class="muted">Escolha o jogador que você quer. O app monta pacotes do seu elenco que o dono teria motivo para aceitar.</p>
+          <div class="target-row">
+            <select id="target-select" aria-label="Jogador alvo"></select>
+            <button id="target-btn" type="button">Montar propostas</button>
+          </div>
+        </div>
       </div>
       <div id="finder-summary"></div>
       <div id="finder-results"></div>
+    </section>
+
+    <section id="tab-waivers" class="tab" hidden>
+      <div class="controls">
+        <button id="waivers-btn" type="button" class="ghost">Atualizar radar</button>
+        <span class="muted">Só jogadores livres na sua liga. Para pedir um deles, use o app do Sleeper.</span>
+      </div>
+      <div id="waivers-summary"></div>
+      <h3 class="section-title">Em alta no Sleeper nas últimas 24h</h3>
+      <div id="waivers-trending"></div>
+      <h3 class="section-title">Melhores livres nas suas posições em escassez</h3>
+      <div id="waivers-best"></div>
     </section>
   </main>
 </body>

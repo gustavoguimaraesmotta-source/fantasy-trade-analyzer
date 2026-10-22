@@ -62,4 +62,6 @@ export const sleeper = {
   leagueUsers: (leagueId) => get(`/league/${leagueId}/users`),
   rosters: (leagueId) => get(`/league/${leagueId}/rosters`),
   players: getPlayers,
+  // [{player_id, count}] dos jogadores mais adicionados no Sleeper inteiro nas últimas 24h.
+  trendingAdds: (limit = 50) => get(`/players/nfl/trending/add?lookback_hours=24&limit=${limit}`),
 };

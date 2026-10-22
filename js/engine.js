@@ -237,10 +237,12 @@ export function analyzeTrade(ctx, sent, received, myRosterId = null, partnerRost
 
 const PACKAGE_SHAPES = [[1, 1], [2, 1], [1, 2]];
 
-function combinations(arr, k) {
-  if (k === 1) return arr.map((x) => [x]);
+function combinations(arr, k, start = 0) {
+  if (k === 0) return [[]];
   const out = [];
-  for (let i = 0; i < arr.length; i++) for (let j = i + 1; j < arr.length; j++) out.push([arr[i], arr[j]]);
+  for (let i = start; i <= arr.length - k; i++) {
+    for (const rest of combinations(arr, k - 1, i + 1)) out.push([arr[i], ...rest]);
+  }
   return out;
 }
 
@@ -331,6 +333,10 @@ function formatSuggestion(ctx, s, partner, theirNeeds) {
   let reason = `Você reforça ${getPos.join("/")} cedendo ${givePos.join("/")}`;
   const helped = givePos.filter((p) => theirNeeds.has(p));
   if (helped.length) reason += `; ${partner.team_name || partner.display_name} tem escassez em ${helped.join("/")}`;
+  return suggestionPayload(ctx, s, partner, reason + ".");
+}
+
+function suggestionPayload(ctx, s, partner, reason) {
   return {
     partner,
     give: s.give.map((p) => ctx.playerCard(p)),
@@ -341,8 +347,115 @@ function formatSuggestion(ctx, s, partner, theirNeeds) {
     my_lineup_gain: r1(s.myGain),
     their_lineup_gain: r1(s.theirGain),
     score: r1(s.score),
-    reason: reason + ".",
+    reason,
   };
+}
+
+// --- Trade Finder com alvo ---------------------------------------------------
+// Você escolhe um jogador de outro time; testamos pacotes de 1 a 3 jogadores seus e mantemos
+// os que respeitam a tolerância de valor e dão ao dono um motivo para aceitar:
+// ele recebe pelo menos o mesmo valor de mercado, ou o lineup titular dele melhora.
+
+const TARGET_MAX_LINEUP_LOSS = 0.05; // até 5% do titular dele, se receber mais valor
+const EXTRA_PLAYER_PENALTY = 400;
+
+export function findTradesForTarget(ctx, myRosterId, targetId, { tolerance = 0.15, poolSize = 12, maxResults = 10 } = {}) {
+  const owner = ctx.rosters.find((r) => (r.players || []).includes(targetId));
+  if (!owner) throw new Error("Esse jogador não está em nenhum elenco da liga.");
+  const rid = owner.roster_id;
+  if (rid === myRosterId) throw new Error("Esse jogador já está no seu time.");
+  const targetValue = ctx.values[targetId] || 0;
+  if (targetValue <= 0) throw new Error("Esse jogador não tem valor de mercado para comparar.");
+
+  const value = (pid) => ctx.values[pid] || 0;
+  const myIds = ctx.rosterPlayerIds(myRosterId);
+  const theirIds = ctx.rosterPlayerIds(rid);
+  const myBefore = ctx.lineup(myIds).total;
+  const theirBefore = ctx.lineup(theirIds).total;
+  const theirAfterBase = theirIds.filter((p) => p !== targetId);
+  const pool = myIds.filter((p) => value(p) > 0).sort((a, b) => value(b) - value(a)).slice(0, poolSize);
+
+  const found = [];
+  for (const k of [1, 2, 3]) {
+    for (const give of combinations(pool, k)) {
+      const sentAdj = packageValue(give.map(value));
+      const pct = (targetValue - sentAdj) / Math.max(sentAdj, targetValue);
+      if (Math.abs(pct) > tolerance) continue;
+      const theirGain = ctx.lineup(theirAfterBase.concat(give)).total - theirBefore;
+      // Ele aceitaria se melhora o titular, ou se ganha valor sem perder muito no titular.
+      const acceptable = theirGain > 0 || (pct <= 0 && theirGain >= -TARGET_MAX_LINEUP_LOSS * theirBefore);
+      if (!acceptable) continue;
+      const myGain = ctx.lineup(myIds.filter((p) => !give.includes(p)).concat(targetId)).total - myBefore;
+      // Pacotes maiores ocupam vagas no elenco dele (precisa dispensar alguém): penalizamos.
+      const score = myGain + theirGain - 0.5 * Math.abs(targetValue - sentAdj) - EXTRA_PLAYER_PENALTY * (k - 1);
+      found.push({ give, get: [targetId], sentAdj, recvAdj: targetValue, pct, myGain, theirGain, score });
+    }
+  }
+  found.sort((a, b) => b.score - a.score);
+
+  const partner = ctx.teamMeta(rid);
+  const partnerName = partner.team_name || partner.display_name;
+  const suggestions = found.slice(0, maxResults).map((s) => {
+    const motives = [];
+    if (s.pct <= 0) motives.push(`${partnerName} recebe mais valor de mercado`);
+    if (s.theirGain > 0) motives.push(`o lineup titular de ${partnerName} melhora`);
+    if (s.myGain < 0) motives.push("seu lineup perde um pouco agora, mas você leva o melhor jogador");
+    return suggestionPayload(ctx, s, partner, motives.join("; ").replace(/^./, (c) => c.toUpperCase()) + ".");
+  });
+
+  return { target: ctx.playerCard(targetId), partner, suggestions };
+}
+
+// --- Radar de waivers ----------------------------------------------------------
+// Recebe os jogadores livres da liga (já com valor) e mostra quanto cada um
+// melhoraria o seu lineup titular, destacando quem cobre suas posições em escassez.
+
+export function waiverReport(ctx, myRosterId, freeAgents, faValues, trending) {
+  const [needs] = needsAndSurplus(analyzePositions(ctx)[myRosterId]);
+  const positions = { ...ctx.positions };
+  const values = { ...ctx.values };
+  for (const [pid, p] of Object.entries(freeAgents)) {
+    positions[pid] = p.position;
+    values[pid] = faValues[pid] || 0;
+  }
+  const myIds = ctx.rosterPlayerIds(myRosterId);
+  const before = optimalLineup(myIds, ctx.slots, positions, values).total;
+
+  // Seu jogador mais fraco em cada posição: candidato a ser dispensado pelo agente livre.
+  const weakest = {};
+  for (const pid of myIds) {
+    const pos = positions[pid];
+    if (!weakest[pos] || values[pid] < values[weakest[pos]]) weakest[pos] = pid;
+  }
+
+  const card = (pid) => {
+    const p = freeAgents[pid];
+    const w = weakest[p.position];
+    const upgrade = w && values[pid] > values[w] ? { name: ctx.playerCard(w).name, gain: r1(values[pid] - values[w]) } : null;
+    return {
+      upgrade,
+      id: pid,
+      name: p.full_name || `${p.first_name || ""} ${p.last_name || ""}`.trim() || pid,
+      position: p.position,
+      team: p.team ?? null,
+      age: p.age ?? null,
+      injury_status: p.injury_status ?? null,
+      value: r1(values[pid]),
+      lineup_gain: r1(optimalLineup(myIds.concat(pid), ctx.slots, positions, values).total - before),
+      fills_need: needs.includes(p.position),
+    };
+  };
+
+  const trendingCards = trending.filter((t) => freeAgents[t.player_id]).map((t) => ({ ...card(t.player_id), adds: t.count }));
+  const bestAvailable = {};
+  for (const pos of needs) {
+    bestAvailable[pos] = Object.keys(freeAgents)
+      .filter((pid) => freeAgents[pid].position === pos && values[pid] > 0)
+      .sort((a, b) => values[b] - values[a])
+      .slice(0, 5)
+      .map(card);
+  }
+  return { needs, trending: trendingCards, best_available: bestAvailable };
 }
 
 // --- Panorama da liga ----------------------------------------------------------

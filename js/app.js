@@ -132,6 +132,9 @@ function setMyTeam(rosterId) {
   $("#finder-summary").innerHTML = "";
   $("#finder-results").innerHTML = "";
   $("#trade-result").hidden = true;
+  $("#target-select").innerHTML = targetOptions(others);
+  state.waiversKey = null;
+  if (state.tab === "waivers") loadWaivers();
   renderPower();
   renderCompare();
   renderAnalyzer();
@@ -141,6 +144,7 @@ function showTab(name) {
   state.tab = name;
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".tab").forEach((s) => (s.hidden = s.id !== `tab-${name}`));
+  if (name === "waivers" && state.overview) loadWaivers();
 }
 
 // --- Elencos (power table) ----------------------------------------------------
@@ -288,19 +292,54 @@ async function runFinder() {
     api.finder(leagueId, state.myRosterId, $("#tolerance").value),
   );
   if (!data || state.overview.league.league_id !== leagueId) return;
-  state.suggestions = data.suggestions;
 
   const chips = (list, cls) => list.map((p) => `<span class="rank ${cls}">${p}</span>`).join(" ");
   $("#finder-summary").innerHTML = `<div class="chips"><strong>Seu elenco:</strong>
     escassez ${chips(data.my_needs, "need")} · excesso ${chips(data.my_surplus, "surplus")}</div>`;
+  renderSuggestions(data.suggestions, "Nenhuma troca viável encontrada com essa tolerância. Tente 25%.");
+}
 
-  if (!data.suggestions.length) {
-    $("#finder-results").innerHTML = `<p class="muted">Nenhuma troca viável encontrada com essa tolerância. Tente 25%.</p>`;
+// Lista de jogadores dos outros times, agrupada por time e ordenada por valor.
+function targetOptions(teams) {
+  const groups = teams
+    .map((t) => {
+      const opts = t.players
+        .filter((p) => p.value > 0)
+        .map((p) => `<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.position || "?")} · ${fmt(p.value)}</option>`)
+        .join("");
+      return opts ? `<optgroup label="${esc(teamName(t))}">${opts}</optgroup>` : "";
+    })
+    .join("");
+  return `<option value="">Escolha um jogador...</option>${groups}`;
+}
+
+async function runTargetFinder() {
+  const targetId = $("#target-select").value;
+  if (!targetId) {
+    setStatus("Escolha primeiro o jogador que você quer.", "error");
+    return;
+  }
+  const leagueId = state.overview.league.league_id;
+  const data = await withStatus("Montando propostas...", () =>
+    api.finderTarget(leagueId, state.myRosterId, targetId, $("#tolerance").value),
+  );
+  if (!data || state.overview.league.league_id !== leagueId) return;
+
+  const t = data.target;
+  $("#finder-summary").innerHTML = `<div class="chips"><strong>Alvo:</strong> ${posBadge(t.position)} ${playerName(t)}
+    <small>valor ${fmt(t.value)} · dono: ${esc(teamName(data.partner))}</small></div>`;
+  renderSuggestions(data.suggestions, "Nenhum pacote do seu elenco fecha com essa tolerância. Tente 25% ou outro alvo.");
+}
+
+function renderSuggestions(suggestions, emptyMessage) {
+  state.suggestions = suggestions;
+  if (!suggestions.length) {
+    $("#finder-results").innerHTML = `<p class="muted">${esc(emptyMessage)}</p>`;
     return;
   }
   const list = (players) =>
     `<div class="suggestion-players">${players.map((p) => `<span>${posBadge(p.position)} ${playerName(p)} <small>${fmt(p.value)}</small></span>`).join("")}</div>`;
-  const rows = data.suggestions
+  const rows = suggestions
     .map(
       (s, i) => `<tr>
         <td><strong>${esc(teamName(s.partner))}</strong></td>
@@ -316,6 +355,46 @@ async function runFinder() {
   $("#finder-results").innerHTML = `<div class="table-wrap"><table class="data"><thead><tr>
       <th>Parceiro</th><th>Você envia</th><th>Você recebe</th><th class="num">Valor</th>
       <th class="num">Ganho titular (você / ele)</th><th>Motivo</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// --- Radar de waivers -------------------------------------------------------------
+async function loadWaivers(force = false) {
+  const leagueId = state.overview.league.league_id;
+  const key = `${leagueId}:${state.myRosterId}`;
+  if (!force && state.waiversKey === key) return;
+  state.waiversKey = key;
+
+  const data = await withStatus("Procurando jogadores livres na sua liga...", () => api.waivers(leagueId, state.myRosterId));
+  if (!data) {
+    state.waiversKey = null;
+    return;
+  }
+  if (state.waiversKey !== key) return; // trocou de liga/time no meio
+
+  const chips = data.needs.map((p) => `<span class="rank need">${p}</span>`).join(" ");
+  $("#waivers-summary").innerHTML = `<div class="chips"><strong>Suas posições em escassez:</strong> ${chips}
+    <small>Os destacados preenchem essas posições.</small></div>`;
+
+  const row = (p, extra) => `<tr class="${p.fills_need ? "mine" : ""}">
+      <td>${posBadge(p.position)} ${playerName(p)}${p.fills_need ? `<span class="tag need">escassez</span>` : ""}</td>
+      ${extra}
+      <td class="num">${fmt(p.value)}</td>
+      <td>${p.upgrade ? `${esc(p.upgrade.name)} <span class="pos-delta">${signed(p.upgrade.gain)}</span>` : `<span class="muted">—</span>`}</td>
+      <td class="num ${deltaClass(p.lineup_gain)}">${p.lineup_gain > 0 ? signed(p.lineup_gain) : "—"}</td></tr>`;
+  const table = (head, body) => `<div class="table-wrap"><table class="data"><thead><tr>${head}
+      <th class="num">Valor</th><th>Substitui no seu elenco</th><th class="num">Ganho no titular</th></tr></thead><tbody>${body}</tbody></table></div>`;
+
+  $("#waivers-trending").innerHTML = data.trending.length
+    ? table(`<th>Jogador</th><th class="num">Adições 24h</th>`,
+        data.trending.map((p) => row(p, `<td class="num">${fmt(p.adds)}</td>`)).join(""))
+    : `<p class="muted">Nenhum dos jogadores em alta está livre na sua liga.</p>`;
+
+  const best = Object.entries(data.best_available)
+    .map(([pos, players]) => players.length
+      ? `<h4>${posBadge(pos)} ${pos}</h4>${table("<th>Jogador</th>", players.map((p) => row(p, "")).join(""))}`
+      : `<p class="muted">${pos}: nenhum jogador livre com valor de mercado.</p>`)
+    .join("");
+  $("#waivers-best").innerHTML = best || `<p class="muted">Você não tem posições em escassez.</p>`;
 }
 
 function openSuggestion(index) {
@@ -335,7 +414,10 @@ function bindEvents() {
   $("#league-select").addEventListener("change", (e) => loadLeague(e.target.value));
   $("#refresh-btn").addEventListener("click", () => loadLeague($("#league-select").value, true));
   $("#my-team-select").addEventListener("change", (e) => setMyTeam(+e.target.value));
-  $("#tabs").addEventListener("click", (e) => e.target.dataset.tab && showTab(e.target.dataset.tab));
+  $("#tabs").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-tab]");
+    if (btn) showTab(btn.dataset.tab);
+  });
   $("#cmp-a").addEventListener("change", renderCompare);
   $("#cmp-b").addEventListener("change", renderCompare);
 
@@ -372,6 +454,8 @@ function bindEvents() {
   );
 
   $("#finder-btn").addEventListener("click", runFinder);
+  $("#target-btn").addEventListener("click", runTargetFinder);
+  $("#waivers-btn").addEventListener("click", () => loadWaivers(true));
   $("#finder-results").addEventListener("click", (e) => {
     const idx = e.target.dataset.open;
     if (idx !== undefined) openSuggestion(+idx);

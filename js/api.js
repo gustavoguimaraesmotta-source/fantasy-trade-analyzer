@@ -1,8 +1,16 @@
 // Mesma interface do api.js da versão com servidor, mas tudo roda no navegador:
 // os dados vêm direto do Sleeper/FantasyCalc e os cálculos ficam em engine.js.
 import { sleeper } from "./sleeper.js";
-import { getValues } from "./values.js";
-import { LeagueContext, analyzeTrade, buildOverview, findTrades } from "./engine.js";
+import { getValues, marketValueMap } from "./values.js";
+import {
+  CORE_POSITIONS,
+  LeagueContext,
+  analyzeTrade,
+  buildOverview,
+  findTrades,
+  findTradesForTarget,
+  waiverReport,
+} from "./engine.js";
 
 const LEAGUE_TTL = 10 * 60 * 1000;
 const contexts = new Map();
@@ -29,6 +37,7 @@ async function getContext(leagueId, refresh = false) {
     values,
     valueSource: source,
   });
+  ctx.allPlayers = allPlayers; // usado pelo radar de waivers (jogadores fora dos elencos)
   contexts.set(leagueId, ctx);
   return ctx;
 }
@@ -67,5 +76,26 @@ export const api = {
     const rid = Number(rosterId);
     if (!ctx.rostersById.has(rid)) throw new Error(`roster_id ${rid} não existe nesta liga`);
     return findTrades(ctx, rid, { tolerance: Number(tolerance) });
+  },
+
+  async finderTarget(leagueId, rosterId, targetId, tolerance) {
+    const ctx = await getContext(leagueId);
+    return findTradesForTarget(ctx, Number(rosterId), targetId, { tolerance: Number(tolerance) });
+  },
+
+  async waivers(leagueId, rosterId) {
+    const ctx = await getContext(leagueId);
+    const [trending, market] = await Promise.all([sleeper.trendingAdds(), marketValueMap(ctx.league)]);
+
+    // Livres = em alta no Sleeper ou com valor no FantasyCalc, e fora de todos os elencos da liga.
+    const rostered = new Set(ctx.rosters.flatMap((r) => r.players || []));
+    const candidates = new Set([...trending.map((t) => t.player_id), ...Object.keys(market)]);
+    const freeAgents = {};
+    for (const pid of candidates) {
+      const p = ctx.allPlayers[pid];
+      if (p && !rostered.has(pid) && CORE_POSITIONS.includes(p.position)) freeAgents[pid] = p;
+    }
+    const { values } = await getValues(ctx.league, freeAgents);
+    return waiverReport(ctx, Number(rosterId), freeAgents, values, trending);
   },
 };
