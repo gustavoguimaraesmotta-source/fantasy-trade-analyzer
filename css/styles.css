@@ -160,6 +160,9 @@ table.data tr:last-child td { border-bottom: none; }
 .sides li { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
 .sides li .v { margin-left: auto; font-variant-numeric: tabular-nums; }
 .total { font-size: 22px; font-weight: 800; }
+.trade-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 6px; }
+.button-link { display: inline-block; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border);
+  color: var(--text); text-decoration: none; font-weight: 600; }
 
 .balance-bar { position: relative; height: 12px; border-radius: 999px; margin: 18px 0 6px;
   background: linear-gradient(90deg, var(--danger), var(--warn) 35%, var(--accent) 50%, var(--warn) 65%, var(--danger)); opacity: .85; }

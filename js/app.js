@@ -283,7 +283,101 @@ function renderTradeResult(r) {
     <div class="sides">${sideHtml("Você envia", r.sent)}${sideHtml("Você recebe", r.received)}</div>
     <div class="balance-bar"><div class="marker" style="left:${marker}%"></div></div>
     <div class="balance-legend"><span>Parceiro vence</span><span>Justa</span><span>Você vence</span></div>
-    ${impact}`;
+    ${impact}
+    <div class="trade-actions">
+      <button type="button" id="share-trade">📤 Compartilhar troca</button>
+      <a class="button-link ghost" href="https://sleeper.com/leagues/${esc(state.overview.league.league_id)}" target="_blank" rel="noopener">Propor no Sleeper ↗</a>
+    </div>
+    <small class="muted">O Sleeper não permite abrir uma troca já montada: no app, entre em Trades e escolha os mesmos jogadores.</small>`;
+}
+
+// --- Link da troca ----------------------------------------------------------------
+// O link guarda liga, times e jogadores; quem abre vê a mesma troca já analisada.
+function tradeLink() {
+  const q = new URLSearchParams({
+    liga: state.overview.league.league_id,
+    de: state.myRosterId,
+    para: state.partnerId,
+    envia: [...state.sent].join(","),
+    recebe: [...state.received].join(","),
+  });
+  return `${location.origin}${location.pathname}?${q}`;
+}
+
+async function shareTrade() {
+  const me = teamById(state.myRosterId);
+  const partner = teamById(state.partnerId);
+  const names = (t, ids) => t.players.filter((p) => ids.has(p.id)).map((p) => p.name).join(", ") || "nada";
+  const text = `Proposta de troca (${state.overview.league.name})\n` +
+    `${teamName(me)} envia: ${names(me, state.sent)}\n${teamName(partner)} envia: ${names(partner, state.received)}\nVeja a análise:`;
+  const url = tradeLink();
+
+  // No celular abre o menu de compartilhar (WhatsApp etc.); no computador copia o link.
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "Proposta de troca", text, url });
+      return;
+    } catch (err) {
+      if (err.name === "AbortError") return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(`${text} ${url}`);
+    setStatus("Troca copiada. Cole no grupo da liga.");
+  } catch {
+    window.prompt("Copie o link da troca:", url);
+  }
+}
+
+async function openTradeLink() {
+  const q = new URLSearchParams(location.search);
+  const leagueId = q.get("liga");
+  if (!leagueId) return;
+  history.replaceState(null, "", location.pathname);
+  const ids = (k) => (q.get(k) || "").split(",").filter(Boolean);
+  let from = Number(q.get("de"));
+  let to = Number(q.get("para"));
+  let sent = ids("envia");
+  let received = ids("recebe");
+
+  // Se o usuário já usou o app neste aparelho, abre com as ligas dele (e descobre qual é o time dele).
+  const username = store.get("fta.username");
+  const data = username ? await api.leagues(username, "").catch(() => null) : null;
+  if (data) state.user = data.user;
+  $("#league-select").innerHTML = (data?.leagues ?? [])
+    .map((l) => `<option value="${esc(l.league_id)}">${esc(l.name)} (${l.total_rosters} times)</option>`)
+    .join("");
+  $("#league-bar").hidden = false;
+
+  state.tab = "analyzer";
+  await loadLeague(leagueId);
+  const ov = state.overview;
+  if (ov?.league.league_id !== leagueId) return;
+  if (![...$("#league-select").options].some((o) => o.value === leagueId)) {
+    $("#league-select").insertAdjacentHTML("beforeend", `<option value="${esc(leagueId)}">${esc(ov.league.name)} (${ov.league.total_rosters} times)</option>`);
+  }
+  $("#league-select").value = leagueId;
+  if (!teamById(from) || !teamById(to) || from === to) {
+    setStatus("Esse link de troca não confere com os times da liga.", "error");
+    return;
+  }
+
+  // Quem recebeu a proposta vê do próprio lado: "Você envia" passa a ser o que ele manda.
+  if (state.user && to === state.myRosterId) {
+    [from, to, sent, received] = [to, from, received, sent];
+  }
+  state.partnerId = to;
+  setMyTeam(from);
+  const owned = (rid, list) => list.filter((pid) => teamById(rid).players.some((p) => p.id === pid));
+  state.sent = new Set(owned(from, sent));
+  state.received = new Set(owned(to, received));
+  renderAnalyzer();
+  showTab("analyzer");
+  await runAnalyze();
+  const missing = sent.length + received.length - state.sent.size - state.received.size;
+  setStatus(missing
+    ? `Troca aberta pelo link. ${missing} jogador(es) já não estão mais nesses times e ficaram de fora.`
+    : `Troca aberta pelo link: ${teamName(teamById(from))} ↔ ${teamName(teamById(to))}.`);
 }
 
 // --- Trade Finder ---------------------------------------------------------------
@@ -512,6 +606,9 @@ function bindEvents() {
       () => setStatus(`Procure "${name}" na busca de jogadores do Sleeper.`),
     );
   });
+  $("#trade-result").addEventListener("click", (e) => {
+    if (e.target.closest("#share-trade")) shareTrade();
+  });
   $("#finder-results").addEventListener("click", (e) => {
     const idx = e.target.dataset.open;
     if (idx !== undefined) openSuggestion(+idx);
@@ -521,6 +618,7 @@ function bindEvents() {
 bindEvents();
 const savedUser = store.get("fta.username");
 if (savedUser) $("#username").value = savedUser;
+openTradeLink();
 
 // Tema: Claro -> Escuro -> Automático (segue o sistema). Fica salvo no aparelho.
 const THEMES = [
