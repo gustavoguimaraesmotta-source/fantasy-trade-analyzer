@@ -5,11 +5,13 @@ import { getValues, marketValueMap } from "./values.js";
 import {
   CORE_POSITIONS,
   LeagueContext,
+  STREAM_POSITIONS,
   analyzeTrade,
   buildOverview,
   findTrades,
   findTradesForOffer,
   findTradesForTargets,
+  streamerReport,
   waiverReport,
 } from "./engine.js";
 
@@ -102,6 +104,22 @@ export const api = {
       if (p && !rostered.has(pid) && CORE_POSITIONS.includes(p.position)) freeAgents[pid] = p;
     }
     const { values } = await getValues(ctx.league, freeAgents);
-    return waiverReport(ctx, Number(rosterId), freeAgents, values, trending);
+    const report = waiverReport(ctx, Number(rosterId), freeAgents, values, trending);
+    report.streamers = await streamers(ctx, Number(rosterId));
+    return report;
   },
 };
+
+// K e DEF pela projeção da semana; se o Sleeper não responder, o resto do radar segue normal.
+async function streamers(ctx, rosterId) {
+  const positions = STREAM_POSITIONS.filter((p) => ctx.slots.includes(p));
+  if (!positions.length) return null;
+  try {
+    const state = await sleeper.state();
+    const week = state.season_type === "regular" ? state.week : 1;
+    const projections = await sleeper.projections(ctx.league.season, week, positions);
+    return streamerReport(ctx, rosterId, ctx.allPlayers, projections, week);
+  } catch {
+    return { error: true, positions: Object.fromEntries(positions.map((p) => [p, null])) };
+  }
+}

@@ -593,6 +593,46 @@ export function waiverReport(ctx, myRosterId, freeAgents, faValues, trending) {
   return { needs, trending: trendingCards, best_available: bestAvailable };
 }
 
+// K e DEF não têm valor de mercado (FantasyCalc ignora e a DEF nem tem ranking no Sleeper).
+// Como são posições de "streaming", comparamos a projeção desta semana: os melhores livres
+// contra o seu melhor jogador da posição. projections: [{player_id, opponent, stats}] do Sleeper.
+export const STREAM_POSITIONS = ["K", "DEF"];
+
+export function streamerReport(ctx, myRosterId, allPlayers, projections, week, { limit = 8 } = {}) {
+  const rostered = new Set(ctx.rosters.flatMap((r) => r.players || []));
+  const myIds = new Set(ctx.rosterPlayerIds(myRosterId));
+  const proj = new Map(projections.map((row) => [row.player_id, row]));
+  const points = (pid) => r1(proj.get(pid)?.stats?.pts_std ?? 0);
+  const card = (pid) => {
+    const p = allPlayers[pid] || {};
+    return {
+      id: pid,
+      name: p.full_name || `${p.first_name || ""} ${p.last_name || ""}`.trim() || pid,
+      position: p.position,
+      team: p.team ?? null,
+      injury_status: p.injury_status ?? null,
+      opponent: proj.get(pid)?.opponent ?? null,
+      projection: points(pid),
+    };
+  };
+
+  const report = {};
+  for (const pos of STREAM_POSITIONS.filter((p) => ctx.slots.includes(p))) {
+    const mine = [...myIds].filter((pid) => allPlayers[pid]?.position === pos).sort((a, b) => points(b) - points(a));
+    const current = mine.length ? card(mine[0]) : null;
+    const free = Object.keys(allPlayers)
+      .filter((pid) => allPlayers[pid].position === pos && allPlayers[pid].team && !rostered.has(pid) && proj.has(pid))
+      .sort((a, b) => points(b) - points(a))
+      .slice(0, limit)
+      .map((pid) => {
+        const c = card(pid);
+        return { ...c, gain: r1(c.projection - (current?.projection ?? 0)) };
+      });
+    report[pos] = { current, free };
+  }
+  return { week, positions: report };
+}
+
 // --- Panorama da liga ----------------------------------------------------------
 
 export function buildOverview(ctx) {

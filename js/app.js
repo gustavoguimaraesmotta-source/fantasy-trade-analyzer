@@ -2,6 +2,7 @@ import { api } from "./api.js";
 
 const CORE = ["QB", "RB", "WR", "TE"];
 const ALL_POS = ["QB", "RB", "WR", "TE", "K", "DEF"];
+const STREAM = ["K", "DEF"];
 const STATUS = { need: "Escassez", surplus: "Excesso", balanced: "Equilíbrio" };
 
 const state = {
@@ -570,11 +571,22 @@ function renderWaivers() {
   const data = state.waivers;
   if (!data) return;
   const leagueId = state.overview.league.league_id;
-  const filter = state.waiversPos || "need";
+  // K/DEF só aparecem se a liga tem essas vagas no titular.
+  const streamPos = Object.keys(data.streamers?.positions ?? {});
+  document.querySelectorAll("#waivers-pos button").forEach((b) => {
+    if (STREAM.includes(b.dataset.pos)) b.hidden = !streamPos.includes(b.dataset.pos);
+  });
+  let filter = state.waiversPos || "need";
+  if (STREAM.includes(filter) && !streamPos.includes(filter)) filter = "need";
   document.querySelectorAll("#waivers-pos button").forEach((b) => b.classList.toggle("active", b.dataset.pos === filter));
-  const shownPos = filter === "need" ? data.needs : filter === "all" ? CORE : [filter];
+  const isStream = STREAM.includes(filter);
+  const shownPos = filter === "need" ? data.needs : filter === "all" ? CORE : isStream ? [] : [filter];
+  const shownStream = filter === "all" ? streamPos : isStream ? [filter] : [];
+  $("#waivers-trending-title").hidden = isStream;
+  $("#waivers-trending").hidden = isStream;
   $("#waivers-best-title").textContent =
     filter === "need" ? "Melhores livres nas suas posições em escassez" : filter === "all" ? "Melhores livres por posição" : `Melhores ${filter} livres`;
+  $("#waivers-best-title").hidden = isStream;
 
   const chips = data.needs.map((p) => `<span class="rank need">${p}</span>`).join(" ");
   $("#waivers-summary").innerHTML = `<div class="chips"><strong>Suas posições em escassez:</strong> ${chips}
@@ -605,7 +617,29 @@ function renderWaivers() {
       ? `<h4>${posBadge(pos)} ${pos}</h4>${table("<th>Jogador</th>", players.map((p) => row(p, "")).join(""))}`
       : `<p class="muted">${pos}: nenhum jogador livre com valor de mercado.</p>`)
     .join("");
-  $("#waivers-best").innerHTML = best || `<p class="muted">Você não tem posições em escassez.</p>`;
+  const stream = shownStream.map((pos) => streamerBlock(pos, data.streamers, sleeperLink)).join("");
+  $("#waivers-best").innerHTML = best + stream || `<p class="muted">Você não tem posições em escassez.</p>`;
+}
+
+// K e DEF: projeção de pontos desta semana, comparada com o seu melhor jogador da posição.
+function streamerBlock(pos, streamers, sleeperLink) {
+  const info = streamers.positions[pos];
+  const head = `<h4>${posBadge(pos)} ${pos} <small class="muted">projeção da semana${streamers.week ? ` ${streamers.week}` : ""}</small></h4>`;
+  if (!info) return `${head}<p class="muted">Não deu para buscar as projeções do Sleeper agora. Tente "Atualizar radar".</p>`;
+  const vs = (p) => (p.opponent ? `vs ${esc(p.opponent)}` : `<span class="muted">bye</span>`);
+  const current = info.current
+    ? `<p class="muted list-note">Seu ${pos}: <strong>${playerName(info.current)}</strong> · ${vs(info.current)} · ${info.current.projection.toFixed(1)} pts</p>`
+    : `<p class="muted list-note">Você não tem ${pos} no elenco.</p>`;
+  if (!info.free.length) return `${head}${current}<p class="muted">Nenhum ${pos} livre com projeção nesta semana.</p>`;
+  const rows = info.free
+    .map((p) => `<tr class="${p.gain > 0 ? "mine" : ""}">
+      <td>${posBadge(p.position)} ${playerName(p)} ${sleeperLink(p)}</td>
+      <td>${vs(p)}</td>
+      <td class="num">${p.projection.toFixed(1)}</td>
+      <td class="num ${deltaClass(p.gain)}">${p.gain > 0 ? "+" : ""}${p.gain.toFixed(1)}</td></tr>`)
+    .join("");
+  return `${head}${current}<div class="table-wrap"><table class="data"><thead><tr><th>Jogador</th><th>Jogo</th>
+    <th class="num">Pontos projetados</th><th class="num">vs seu ${pos}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function openSuggestion(index) {

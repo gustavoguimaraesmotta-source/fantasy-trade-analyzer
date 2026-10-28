@@ -65,4 +65,11 @@ export const sleeper = {
   players: getPlayers,
   // [{player_id, count}] dos jogadores mais adicionados no Sleeper inteiro nas últimas 24h.
   trendingAdds: (limit = 50) => get(`/players/nfl/trending/add?lookback_hours=24&limit=${limit}`),
+  // Projeções da semana (API não documentada do próprio Sleeper, usada pelo app deles).
+  async projections(season, week, positions) {
+    const q = positions.map((p) => `position[]=${encodeURIComponent(p)}`).join("&");
+    const resp = await fetch(`https://api.sleeper.com/projections/nfl/${season}/${week}?season_type=regular&${q}`);
+    if (!resp.ok) throw new Error(`Projeções do Sleeper indisponíveis (${resp.status}).`);
+    return resp.json();
+  },
 };
