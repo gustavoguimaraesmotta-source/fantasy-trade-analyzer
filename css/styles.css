@@ -178,7 +178,7 @@ table.data tr:last-child td { border-bottom: none; }
 .suggestion-players { display: flex; flex-direction: column; gap: 2px; }
 .reason { white-space: normal !important; min-width: 220px; color: var(--muted); font-size: 12px; }
 
-.finder-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.finder-modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-bottom: 14px; }
 .finder-modes .panel { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .finder-modes h3 { font-size: 15px; }
 .finder-modes p { margin: 0; }
@@ -218,3 +218,8 @@ table.data tr:last-child td { border-bottom: none; }
   .tab-long { display: none; }
   .player-list { max-height: 50vh; }
 }
+
+/* Filtro de posição dos waivers */
+.pos-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px; }
+.pos-filter button { background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 6px 12px; border-radius: 999px; font-size: 13px; }
+.pos-filter button.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }

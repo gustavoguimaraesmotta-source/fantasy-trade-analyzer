@@ -8,6 +8,7 @@ import {
   analyzeTrade,
   buildOverview,
   findTrades,
+  findTradesForOffer,
   findTradesForTargets,
   waiverReport,
 } from "./engine.js";
@@ -71,11 +72,16 @@ export const api = {
     return analyzeTrade(ctx, body.sent || [], body.received || [], body.my_roster_id ?? null, body.partner_roster_id ?? null);
   },
 
-  async finder(leagueId, rosterId, tolerance) {
+  async finder(leagueId, rosterId, tolerance, wantPositions = null) {
     const ctx = await getContext(leagueId);
     const rid = Number(rosterId);
     if (!ctx.rostersById.has(rid)) throw new Error(`roster_id ${rid} não existe nesta liga`);
-    return findTrades(ctx, rid, { tolerance: Number(tolerance) });
+    return findTrades(ctx, rid, { tolerance: Number(tolerance), wantPositions });
+  },
+
+  async finderOffer(leagueId, rosterId, giveIds, tolerance, wantPositions = null) {
+    const ctx = await getContext(leagueId);
+    return findTradesForOffer(ctx, Number(rosterId), giveIds, { tolerance: Number(tolerance), wantPositions });
   },
 
   async finderTargets(leagueId, rosterId, targetIds, tolerance) {

@@ -119,8 +119,28 @@
       <div class="finder-modes">
         <div class="panel">
           <h3>Escanear a liga</h3>
-          <p class="muted">Procura trocas que cubram suas posições em escassez com o excesso dos outros times.</p>
+          <p class="muted">Procura trocas que cubram suas posições em escassez com o excesso dos outros times, ou só a posição que você escolher.</p>
+          <label class="target-team">Posição
+            <select id="finder-pos">
+              <option value="">Minhas escassez (automático)</option>
+              <option>QB</option><option>RB</option><option>WR</option><option>TE</option>
+            </select>
+          </label>
           <button id="finder-btn" type="button">Escanear liga</button>
+        </div>
+        <div class="panel target-panel">
+          <h3>Oferecer meus jogadores</h3>
+          <p class="muted">Marque até 3 jogadores do seu time. O app procura em todos os times o que dá para receber por eles.</p>
+          <label class="target-team">Quero receber
+            <select id="offer-pos">
+              <option value="">Qualquer posição</option>
+              <option>QB</option><option>RB</option><option>WR</option><option>TE</option>
+            </select>
+          </label>
+          <div id="offer-chips" class="target-chips"></div>
+          <input class="filter" id="offer-filter" data-list="offer-list" placeholder="Filtrar jogador...">
+          <div id="offer-list" class="player-list target-list"></div>
+          <button id="offer-btn" type="button">Ver o que consigo</button>
         </div>
         <div class="panel target-panel">
           <h3>Buscar alvos</h3>
@@ -141,9 +161,17 @@
         <span class="muted">Só jogadores livres na sua liga. Para pedir um deles, use o app do Sleeper.</span>
       </div>
       <div id="waivers-summary"></div>
+      <div id="waivers-pos" class="pos-filter" role="group" aria-label="Filtrar por posição">
+        <button type="button" data-pos="need" class="active">Minhas escassez</button>
+        <button type="button" data-pos="QB">QB</button>
+        <button type="button" data-pos="RB">RB</button>
+        <button type="button" data-pos="WR">WR</button>
+        <button type="button" data-pos="TE">TE</button>
+        <button type="button" data-pos="all">Todas</button>
+      </div>
       <h3 class="section-title">Em alta no Sleeper nas últimas 24h</h3>
       <div id="waivers-trending"></div>
-      <h3 class="section-title">Melhores livres nas suas posições em escassez</h3>
+      <h3 class="section-title" id="waivers-best-title">Melhores livres nas suas posições em escassez</h3>
       <div id="waivers-best"></div>
     </section>
   </main>

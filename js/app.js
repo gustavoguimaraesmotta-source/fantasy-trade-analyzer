@@ -134,6 +134,8 @@ function setMyTeam(rosterId) {
   $("#trade-result").hidden = true;
   $("#target-team").innerHTML = options(others, state.partnerId);
   setTargetTeam(state.partnerId);
+  state.offer = new Set();
+  renderOfferPicker();
   state.waiversKey = null;
   if (state.tab === "waivers") loadWaivers();
   renderPower();
@@ -383,15 +385,74 @@ async function openTradeLink() {
 // --- Trade Finder ---------------------------------------------------------------
 async function runFinder() {
   const leagueId = state.overview.league.league_id;
+  const pos = $("#finder-pos").value;
   const data = await withStatus("Escaneando elencos adversários...", () =>
-    api.finder(leagueId, state.myRosterId, $("#tolerance").value),
+    api.finder(leagueId, state.myRosterId, $("#tolerance").value, pos ? [pos] : null),
   );
   if (!data || state.overview.league.league_id !== leagueId) return;
 
   const chips = (list, cls) => list.map((p) => `<span class="rank ${cls}">${p}</span>`).join(" ");
-  $("#finder-summary").innerHTML = `<div class="chips"><strong>Seu elenco:</strong>
+  $("#finder-summary").innerHTML = pos
+    ? `<div class="chips"><strong>Procurando:</strong> ${posBadge(pos)} <small>trocas que melhoram seu titular nessa posição</small></div>`
+    : `<div class="chips"><strong>Seu elenco:</strong>
     escassez ${chips(data.my_needs, "need")} · excesso ${chips(data.my_surplus, "surplus")}</div>`;
-  renderSuggestions(data.suggestions, "Nenhuma troca viável encontrada com essa tolerância. Tente 25%.");
+  renderSuggestions(data.suggestions, pos
+    ? `Nenhuma troca por ${pos} que melhore seu titular com essa tolerância. Tente 25%.`
+    : "Nenhuma troca viável encontrada com essa tolerância. Tente 25%.");
+}
+
+// --- Oferecer meus jogadores: marca até MAX_TARGETS do seu time -------------------
+function renderOfferPicker() {
+  const me = teamById(state.myRosterId);
+  const players = (me?.players ?? []).filter((p) => p.value > 0);
+  const full = state.offer.size >= MAX_TARGETS;
+  $("#offer-list").innerHTML =
+    players
+      .map((p) => {
+        const checked = state.offer.has(p.id);
+        return `<label class="player-row" data-name="${esc(p.name.toLowerCase())}">
+          <input type="checkbox" value="${esc(p.id)}" ${checked ? "checked" : ""} ${full && !checked ? "disabled" : ""}>
+          ${posBadge(p.position)}<span>${playerName(p)}</span><span class="val">${fmt(p.value)}</span></label>`;
+      })
+      .join("") || `<p class="muted">Seu time não tem jogadores com valor de mercado.</p>`;
+  filterOfferList();
+
+  const chosen = players.filter((p) => state.offer.has(p.id));
+  $("#offer-chips").innerHTML = chosen.length
+    ? chosen.map((p) => `<span class="target-chip">${esc(p.name)}<button type="button" data-remove="${esc(p.id)}" aria-label="Remover ${esc(p.name)}">×</button></span>`).join("") +
+      `<small>${chosen.length}/${MAX_TARGETS} · valor somado ${fmt(chosen.reduce((s, p) => s + p.value, 0))}</small>`
+    : `<small class="muted">Nenhum jogador marcado.</small>`;
+}
+
+function filterOfferList() {
+  const q = $("#offer-filter").value.trim().toLowerCase();
+  document.querySelectorAll("#offer-list .player-row").forEach((row) => {
+    row.hidden = q && !row.dataset.name.includes(q);
+  });
+}
+
+function toggleOffer(pid, on) {
+  if (on && state.offer.size < MAX_TARGETS) state.offer.add(pid);
+  else state.offer.delete(pid);
+  renderOfferPicker();
+}
+
+async function runOfferFinder() {
+  if (!state.offer.size) {
+    setStatus("Marque pelo menos um jogador do seu time.", "error");
+    return;
+  }
+  const leagueId = state.overview.league.league_id;
+  const pos = $("#offer-pos").value;
+  const data = await withStatus("Procurando o que dá para receber...", () =>
+    api.finderOffer(leagueId, state.myRosterId, [...state.offer], $("#tolerance").value, pos ? [pos] : null),
+  );
+  if (!data || state.overview.league.league_id !== leagueId) return;
+
+  const names = data.offer.map((p) => `${posBadge(p.position)} ${playerName(p)}`).join(", ");
+  $("#finder-summary").innerHTML = `<div class="chips"><strong>Você oferece:</strong> ${names}
+    ${pos ? `<small>recebendo ${pos}</small>` : ""}</div>`;
+  renderSuggestions(data.suggestions, "Nenhum time tem um pacote de valor parecido com essa tolerância. Tente 25%.");
 }
 
 // --- Buscar alvos: escolhe o time, depois marca até MAX_TARGETS jogadores ----------
@@ -500,6 +561,20 @@ async function loadWaivers(force = false) {
     return;
   }
   if (state.waiversKey !== key) return; // trocou de liga/time no meio
+  state.waivers = data;
+  renderWaivers();
+}
+
+// Filtro de posição: "need" = suas posições em escassez, "all" = todas, ou uma posição.
+function renderWaivers() {
+  const data = state.waivers;
+  if (!data) return;
+  const leagueId = state.overview.league.league_id;
+  const filter = state.waiversPos || "need";
+  document.querySelectorAll("#waivers-pos button").forEach((b) => b.classList.toggle("active", b.dataset.pos === filter));
+  const shownPos = filter === "need" ? data.needs : filter === "all" ? CORE : [filter];
+  $("#waivers-best-title").textContent =
+    filter === "need" ? "Melhores livres nas suas posições em escassez" : filter === "all" ? "Melhores livres por posição" : `Melhores ${filter} livres`;
 
   const chips = data.needs.map((p) => `<span class="rank need">${p}</span>`).join(" ");
   $("#waivers-summary").innerHTML = `<div class="chips"><strong>Suas posições em escassez:</strong> ${chips}
@@ -517,12 +592,15 @@ async function loadWaivers(force = false) {
   const table = (head, body) => `<div class="table-wrap"><table class="data"><thead><tr>${head}
       <th class="num">Valor</th><th>Substitui no seu elenco</th><th class="num">Ganho no titular</th></tr></thead><tbody>${body}</tbody></table></div>`;
 
-  $("#waivers-trending").innerHTML = data.trending.length
+  // Em alta: "Minhas escassez" mostra todos (os de escassez já vêm destacados); uma posição filtra.
+  const trending = filter === "need" || filter === "all" ? data.trending : data.trending.filter((p) => p.position === filter);
+  $("#waivers-trending").innerHTML = trending.length
     ? table(`<th>Jogador</th><th class="num">Adições 24h</th>`,
-        data.trending.map((p) => row(p, `<td class="num">${fmt(p.adds)}</td>`)).join(""))
-    : `<p class="muted">Nenhum dos jogadores em alta está livre na sua liga.</p>`;
+        trending.map((p) => row(p, `<td class="num">${fmt(p.adds)}</td>`)).join(""))
+    : `<p class="muted">Nenhum dos jogadores em alta${filter === "need" || filter === "all" ? "" : ` de ${filter}`} está livre na sua liga.</p>`;
 
-  const best = Object.entries(data.best_available)
+  const best = shownPos
+    .map((pos) => [pos, data.best_available[pos] ?? []])
     .map(([pos, players]) => players.length
       ? `<h4>${posBadge(pos)} ${pos}</h4>${table("<th>Jogador</th>", players.map((p) => row(p, "")).join(""))}`
       : `<p class="muted">${pos}: nenhum jogador livre com valor de mercado.</p>`)
@@ -596,7 +674,22 @@ function bindEvents() {
     const pid = e.target.dataset.remove;
     if (pid) toggleTarget(pid, false);
   });
+  $("#offer-btn").addEventListener("click", runOfferFinder);
+  $("#offer-list").addEventListener("change", (e) => {
+    if (e.target.type === "checkbox") toggleOffer(e.target.value, e.target.checked);
+  });
+  $("#offer-chips").addEventListener("click", (e) => {
+    const pid = e.target.dataset.remove;
+    if (pid) toggleOffer(pid, false);
+  });
   $("#waivers-btn").addEventListener("click", () => loadWaivers(true));
+  $("#waivers-pos").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-pos]");
+    if (!btn) return;
+    state.waiversPos = btn.dataset.pos;
+    store.set("fta.waiversPos", state.waiversPos);
+    renderWaivers();
+  });
   $("#tab-waivers").addEventListener("click", (e) => {
     const link = e.target.closest(".sleeper-link");
     if (!link) return;
@@ -618,6 +711,7 @@ function bindEvents() {
 bindEvents();
 const savedUser = store.get("fta.username");
 if (savedUser) $("#username").value = savedUser;
+state.waiversPos = store.get("fta.waiversPos") || "need";
 openTradeLink();
 
 // Tema: Claro -> Escuro -> Automático (segue o sistema). Fica salvo no aparelho.

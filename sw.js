@@ -1,7 +1,7 @@
 // Service worker: deixa o app instalável e abre a "casca" do app mesmo com internet ruim.
 // Os dados (Sleeper/FantasyCalc) sempre vêm da rede, e os arquivos do site também (o cache só
 // entra quando está offline), então uma nova versão publicada chega sozinha aos celulares.
-const CACHE = "fta-v2";
+const CACHE = "fta-v3";
 const APP_SHELL = [
   "./",
   "index.html",

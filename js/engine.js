@@ -264,9 +264,15 @@ function needsAndSurplus(team) {
   return [needs, surplus];
 }
 
-export function findTrades(ctx, myRosterId, { tolerance = 0.15, poolSize = 6, perPartner = 3, maxResults = 25 } = {}) {
+// wantPositions: em vez das suas posições em escassez, procura só jogadores dessas posições.
+export function findTrades(ctx, myRosterId, { tolerance = 0.15, poolSize = 6, perPartner = 3, maxResults = 25, wantPositions = null } = {}) {
   const analysis = analyzePositions(ctx);
-  const [myNeeds, mySurplus] = needsAndSurplus(analysis[myRosterId]);
+  let [myNeeds, mySurplus] = needsAndSurplus(analysis[myRosterId]);
+  if (wantPositions?.length) {
+    myNeeds = wantPositions;
+    mySurplus = CORE_POSITIONS.filter((p) => !wantPositions.includes(p));
+    poolSize = Math.max(poolSize, 10); // uma posição só: dá para olhar mais nomes de cada lado
+  }
   const myIds = ctx.rosterPlayerIds(myRosterId);
   const myBefore = ctx.lineup(myIds).total;
   const value = (pid) => ctx.values[pid];
@@ -349,6 +355,66 @@ function suggestionPayload(ctx, s, partner, reason) {
     score: r1(s.score),
     reason,
   };
+}
+
+// --- Oferecer meus jogadores --------------------------------------------------
+// Você marca de 1 a 3 jogadores do seu time; para cada adversário testamos pacotes de 1 ou 2
+// jogadores dele com valor parecido (dentro da tolerância). Não exige que seu titular melhore,
+// já que a ideia pode ser vender, mas descarta pacotes que derrubam o titular do outro dono.
+
+export function findTradesForOffer(ctx, myRosterId, giveIds, { tolerance = 0.15, wantPositions = null, poolSize = 10, perPartner = 2, maxResults = 25 } = {}) {
+  if (!giveIds.length) throw new Error("Marque pelo menos um jogador seu.");
+  if (giveIds.length > MAX_TARGETS) throw new Error(`Escolha no máximo ${MAX_TARGETS} jogadores.`);
+  const myIds = ctx.rosterPlayerIds(myRosterId);
+  if (giveIds.some((pid) => !myIds.includes(pid))) throw new Error("Algum jogador marcado não está mais no seu time.");
+
+  const value = (pid) => ctx.values[pid] || 0;
+  const sentAdj = packageValue(giveIds.map(value));
+  if (sentAdj <= 0) throw new Error("Os jogadores marcados não têm valor de mercado para comparar.");
+  const analysis = analyzePositions(ctx);
+  const myBefore = ctx.lineup(myIds).total;
+  const myAfterBase = myIds.filter((p) => !giveIds.includes(p));
+  const positions = new Set(wantPositions?.length ? wantPositions : CORE_POSITIONS);
+
+  const suggestions = [];
+  for (const roster of ctx.rosters) {
+    const rid = roster.roster_id;
+    if (rid === myRosterId) continue;
+    const theirIds = ctx.rosterPlayerIds(rid);
+    const theirBefore = ctx.lineup(theirIds).total;
+    const theirNeeds = new Set(CORE_POSITIONS.filter((p) => analysis[rid][p].status === "need"));
+    const getPool = theirIds
+      .filter((pid) => positions.has(ctx.positions[pid]) && value(pid) > 0 && value(pid) <= sentAdj * (1 + tolerance))
+      .sort((a, b) => value(b) - value(a))
+      .slice(0, poolSize);
+
+    const found = [];
+    for (const getN of [1, 2]) {
+      for (const get of combinations(getPool, getN)) {
+        const recvAdj = packageValue(get.map(value));
+        const pct = (recvAdj - sentAdj) / Math.max(sentAdj, recvAdj);
+        if (Math.abs(pct) > tolerance) continue;
+        const theirGain = ctx.lineup(theirIds.filter((p) => !get.includes(p)).concat(giveIds)).total - theirBefore;
+        if (theirGain < -MAX_LINEUP_LOSS * theirBefore) continue;
+        const myGain = ctx.lineup(myAfterBase.concat(get)).total - myBefore;
+        const score = myGain + 0.5 * theirGain - 0.5 * Math.abs(recvAdj - sentAdj);
+        found.push({ give: giveIds, get, sentAdj, recvAdj, pct, myGain, theirGain, score });
+      }
+    }
+
+    found.sort((a, b) => b.score - a.score);
+    const partner = ctx.teamMeta(rid);
+    const seenTargets = new Set();
+    for (const s of found) {
+      if (seenTargets.size >= perPartner) break;
+      if (seenTargets.has(s.get[0])) continue;
+      seenTargets.add(s.get[0]);
+      suggestions.push(formatSuggestion(ctx, s, partner, theirNeeds));
+    }
+  }
+
+  suggestions.sort((a, b) => b.score - a.score);
+  return { offer: giveIds.map((pid) => ctx.playerCard(pid)), suggestions: suggestions.slice(0, maxResults) };
 }
 
 // --- Trade Finder com alvos ----------------------------------------------------
@@ -517,11 +583,11 @@ export function waiverReport(ctx, myRosterId, freeAgents, faValues, trending) {
 
   const trendingCards = trending.filter((t) => freeAgents[t.player_id]).map((t) => ({ ...card(t.player_id), adds: t.count }));
   const bestAvailable = {};
-  for (const pos of needs) {
+  for (const pos of CORE_POSITIONS) {
     bestAvailable[pos] = Object.keys(freeAgents)
       .filter((pid) => freeAgents[pid].position === pos && values[pid] > 0)
       .sort((a, b) => values[b] - values[a])
-      .slice(0, 5)
+      .slice(0, 8)
       .map(card);
   }
   return { needs, trending: trendingCards, best_available: bestAvailable };
